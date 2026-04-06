@@ -98,6 +98,15 @@ def get_statistics(env) -> Dict:
              'battery_degradation_calendar': battery_degradation_calendar,
              'battery_degradation_cycling': battery_degradation_cycling,
              'total_reward': env.total_reward,
+             'info_how_much_charge': env.info_how_much_charge,
+             'info_current_time': env.info_current_time,
+             'info_pv_output': env.info_pv_output,
+             'info_ev_soc': env.info_ev_soc,
+             'info_actions': env.info_actions,
+             'info_prices': env.info_prices,
+             'info_reward_profit': env.info_reward_profit,
+             'info_reward_overload': env.info_reward_overload,
+             'info_reward_satisfaction': env.info_reward_satisfaction
              }
 
     if env.simulate_grid:
@@ -204,6 +213,8 @@ def spawn_single_EV(env,
         (env.df_req_energy['Arrival Time'] == arrival_time)
     ][scenario].values[0]
 
+    #print(f"Required energy mean: {required_energy_mean}")
+
     required_energy = np.random.normal(
         required_energy_mean, 0.5*required_energy_mean)  # kWh
 
@@ -218,14 +229,18 @@ def spawn_single_EV(env,
         battery_capacity = env.config["ev"]["battery_capacity"]
 
     if battery_capacity < required_energy:
+        #print(f"Battery capacity: {battery_capacity} is less than required energy: {required_energy}")
         initial_battery_capacity = np.random.randint(1, battery_capacity)
     else:
+        #print(f"Battery capacity: {battery_capacity} is greater than required energy: {required_energy}")
         initial_battery_capacity = battery_capacity - required_energy
 
     if initial_battery_capacity > env.config["ev"]['desired_capacity'] * battery_capacity:
+        #print(f"Initial battery capacity: {initial_battery_capacity} is greater than desired capacity: {env.config['ev']['desired_capacity'] * battery_capacity}")
         initial_battery_capacity = np.random.randint(1, battery_capacity)
 
     if initial_battery_capacity < env.config["ev"]['min_battery_capacity'] and battery_capacity > 2*env.config["ev"]['min_battery_capacity']:
+        #print(f"Initial battery capacity: {initial_battery_capacity} is less than minimum battery capacity: {env.config['ev']['min_battery_capacity']}")
         initial_battery_capacity = env.config["ev"]['min_battery_capacity']
 
     # time of stay dependent on time of arrival
@@ -481,6 +496,17 @@ def EV_spawner(env) -> List[EV]:
     Returns:
         EVs: list of EVs
     '''
+    ev_test = spawn_single_EV(env=env,
+                         scenario=env.scenario,
+                         cs_id=env.charging_stations[0].id,
+                         port=0,
+                         hour=0,
+                         minute=0,
+                         step=0,
+                         min_time_of_stay_steps=85)
+    ev_test.battery_capacity_at_arrival = 10
+    #print(ev_test.get_soc())
+    #return [ev_test]
 
     ev_list = []
 
@@ -547,7 +573,6 @@ def EV_spawner(env) -> List[EV]:
 
                         if ev is not None:
                             ev_list.append(ev)
-
                             occupancy_list[counter, t +
                                            1:ev.time_of_departure] = 1
                 counter += 1

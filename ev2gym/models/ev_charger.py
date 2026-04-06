@@ -111,7 +111,7 @@ class EV_Charger:
         self.total_user_satisfaction = 0
         self.all_user_satisfaction = []
 
-    def step(self, actions, charge_price, discharge_price):
+    def step(self, actions, charge_price, discharge_price, env):
         '''
         Updates the EV charger status according to the actions taken by the EVs
         Inputs:
@@ -130,6 +130,10 @@ class EV_Charger:
         self.current_charge_price = charge_price
         self.current_discharge_price = discharge_price
         self.current_signal = []
+
+        # local_pv is configured in kW; convert to per-step energy (kWh).
+        remaining_pv = env.local_pv * (env.current_pv_ratio/100) * (self.timescale/60)
+        remaining_pv = max(0, remaining_pv)
 
         assert (len(actions) == self.n_ports)
         # if no EV is connected, set action to 0
@@ -175,10 +179,22 @@ class EV_Charger:
                     phases=self.phases,
                     type=self.charger_type)
 
-                profit += abs(actual_energy) * charge_price
+                if actual_energy == 0:
+                    invalid_action_punishment += 1
+                    #print(f'Invalid action punishment: {invalid_action_punishment}, action: {action}, actual_energy: {actual_energy}')
+
+                #print("actual_energy: ", actual_energy, " action: ", action)
+                energy_from_pv = min(actual_energy, remaining_pv)
+                energy_from_grid = actual_energy - energy_from_pv
+                remaining_pv -= energy_from_pv
+
+                profit += abs(energy_from_grid) * charge_price
                 self.total_energy_charged += abs(actual_energy)
-                self.current_power_output += actual_energy * 60/self.timescale
+                self.current_power_output += energy_from_grid * 60/self.timescale
                 self.current_total_amps += actual_amps
+
+                #print(f'action {action} pv_ratio {env.current_pv_ratio} remaining solar {remaining_pv} energy {actual_energy} energy_from_pv {energy_from_pv} energy_from_grid {energy_from_grid}| profit {profit} ev_battery {self.evs_connected[i].get_soc()}')
+
 
             elif action < 0:
                 amps = action * abs(self.max_discharge_current)
@@ -191,10 +207,17 @@ class EV_Charger:
                     phases=self.phases,
                     type=self.charger_type)
 
+                if actual_energy == 0:
+                    invalid_action_punishment += 1
+                    #print(f'Invalid action punishment: {invalid_action_punishment}, action: {action}, actual_energy: {actual_energy}')
+
                 profit += abs(actual_energy) * discharge_price
                 self.total_energy_discharged += abs(actual_energy)
                 self.current_power_output += actual_energy * 60/self.timescale
                 self.current_total_amps += actual_amps
+
+                #print(f'step {env.step} car_id {self.evs_connected[i].id} action {action} remaining solar {remaining_pv} energy {actual_energy}| profit {profit} ev_battery {self.evs_connected[i].get_soc()} discharge price {discharge_price}')
+
 
             # print(f'CS {self.id} port {i} action {action} amps {amps} energy {actual_energy} total_amps {self.current_total_amps}| profit {profit}')
             # print(f'prices {charge_price} {discharge_price}')
@@ -203,6 +226,9 @@ class EV_Charger:
             if self.current_total_amps - 0.0001 > self.max_charge_current:
                 raise Exception(
                     f'sum of amps {self.current_total_amps} is higher than max charge current {self.max_charge_current}')
+
+        #if env is not None:
+        #    env.info_how_much_charge.append(actual_energy)
 
         self.total_profits += profit
 

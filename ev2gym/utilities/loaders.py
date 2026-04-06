@@ -15,8 +15,29 @@ from ev2gym.models.ev import EV
 from ev2gym.models.transformer import Transformer
 from ev2gym.models.grid import PowerGrid
 
+
 from ev2gym.utilities.utils import EV_spawner, generate_power_setpoints, EV_spawner_GF
 
+scenario = "train"  # early, train, optimal, chaotic, insufficient
+scenario_path= ''
+if scenario == "optimal":
+    scenario_path = "data/optimal_pv_scenario/"
+elif scenario == "early":
+    scenario_path = "data/early_pv_scenario/"
+elif scenario == "chaotic":
+    scenario_path = "data/chaotic_pv_scenario/"
+elif scenario == "insufficient":
+    scenario_path = "data/insufficient_pv_scenario/"
+
+prices_file = scenario_path + "test-prices-100.csv"
+pv_file = scenario_path + "test-pv.csv"
+load_file = scenario_path + "almost_zero_load_10_houses.csv"
+
+if scenario == "train":
+    scenario_path = "data/"
+    prices_file = scenario_path + "Netherlands_day-ahead-2015-2024.csv"
+    pv_file = scenario_path + "pv_netherlands.csv"
+    load_file = scenario_path + "residential_loads.csv"
 
 def load_ev_spawn_scenarios(env) -> None:
     '''Loads the EV spawn scenarios of the simulation'''
@@ -111,7 +132,7 @@ def generate_residential_inflexible_loads(env) -> np.ndarray:
 
     # Load the data
     data_path = pkg_resources.resource_filename(
-        'ev2gym', 'data/residential_loads.csv')
+        'ev2gym', load_file)
     data = pd.read_csv(data_path, header=None)
 
     desired_timescale = env.timescale
@@ -146,14 +167,18 @@ def generate_residential_inflexible_loads(env) -> np.ndarray:
     simulation_index = data[data['date'] == simulation_date].index[0]
 
     # select the data for the simulation date
-    data = data[simulation_index:simulation_index+simulation_length]
+    # CHAAANGE HERE
+    data = data[simulation_index:simulation_index+simulation_length+96] # add 96 to the simulation length to have a prediction buffer of 96 hours
 
+    #print(f'Data: {data.to_numpy().shape}')
     # drop the date column
     data = data.drop(columns=['date'])
     new_data = pd.DataFrame()
 
+    number_of_households_per_transformer = 1
+
     for i in range(number_of_transformers):
-        new_data['tr_'+str(i)] = data.sample(10, axis=1,
+        new_data['tr_'+str(i)] = data.sample(1, axis=1,
                                              random_state=env.tr_seed).sum(axis=1)
 
     # return the "tr_" columns
@@ -168,7 +193,7 @@ def generate_pv_generation(env) -> np.ndarray:
 
     # Load the data
     data_path = pkg_resources.resource_filename(
-        'ev2gym', 'data/pv_netherlands.csv')
+        'ev2gym', pv_file)
     data = pd.read_csv(data_path, sep=',', header=0)
     data.drop(['time', 'local_time'], inplace=True, axis=1)
 
@@ -212,7 +237,7 @@ def generate_pv_generation(env) -> np.ndarray:
     simulation_index = data[data['date'] == simulation_date].index[0]
 
     # select the data for the simulation date
-    data = data[simulation_index:simulation_index+simulation_length]
+    data = data[simulation_index:simulation_index+simulation_length + 96] # add 96 to the simulation length to have a prediction buffer of 96 hours
 
     # drop the date column
     data = data.drop(columns=['date'])
@@ -238,13 +263,14 @@ def load_transformers(env) -> List[Transformer]:
     transformers = []
 
     if env.config['inflexible_loads']['include']:
-
         if env.scenario == 'private':
             inflexible_loads = generate_residential_inflexible_loads(env)
 
         # TODO add inflexible loads for public and workplace scenarios
         else:
             inflexible_loads = generate_residential_inflexible_loads(env)
+        #print(f'Inflexible loads: {inflexible_loads}')
+        #0.01
 
     else:
         inflexible_loads = np.zeros((env.number_of_transformers,
@@ -401,9 +427,10 @@ def load_electricity_prices(env) -> Tuple[np.ndarray, np.ndarray]:
         return env.replay.charge_prices, env.replay.discharge_prices
 
     if env.price_data is None:
+
         # else load historical prices
         file_path = pkg_resources.resource_filename(
-            'ev2gym', 'data/Netherlands_day-ahead-2015-2024.csv')
+            'ev2gym', prices_file)
         env.price_data = pd.read_csv(file_path, sep=',', header=0)
         # import polars as pl
         # env.price_data = pl.read_csv(file_path).to_pandas()
@@ -472,7 +499,7 @@ def load_grid(env):
     if env.simulate_grid:
         if env.load_from_replay_path is None:
             pv_profile = load_pv_profiles(env)
-            
+
         grid = PowerGrid(env.config,
                          env=env,
                          pv_profile=pv_profile,
@@ -504,7 +531,7 @@ def load_pv_profiles(env) -> np.ndarray:
 
     # Load the data
     data_path = pkg_resources.resource_filename(
-        'ev2gym', 'data/pv_netherlands.csv')
+        'ev2gym', pv_file)
     data = pd.read_csv(data_path, sep=',', header=0)
     data.drop(['time', 'local_time'], inplace=True, axis=1)
 

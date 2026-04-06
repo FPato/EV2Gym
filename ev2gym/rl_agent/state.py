@@ -109,28 +109,51 @@ def V2G_profit_max_loads(env, *args):
     '''
     This is the state function for the V2GProfitMax scenario with loads
     '''
+    #print('============\nstep:', env.current_step, '\n============')
     
     state = [
-        (env.current_step),        
+        (env.current_step),
     ]
 
     state.append(env.current_power_usage[env.current_step-1])
 
     charge_prices = abs(env.charge_prices[0, env.current_step:
-        env.current_step+20])
+        env.current_step+96])
     
-    if len(charge_prices) < 20:
-        charge_prices = np.append(charge_prices, np.zeros(20-len(charge_prices)))
+    if len(charge_prices) < 96:
+        charge_prices = np.append(charge_prices, np.zeros(96-len(charge_prices)))
     
     state.append(charge_prices)
     
     # For every transformer
     for tr in env.transformers:
         loads, pv = tr.get_load_pv_forecast(step = env.current_step,
-                                            horizon = 20)
+                                            horizon = 96)
+        if pv[0] < -100:
+            env.current_pv_ratio = 100
+        elif pv[0] > 0:
+            env.current_pv_ratio = 0
+        else:
+            env.current_pv_ratio = -pv[0]
+
         power_limits = tr.get_power_limits(step = env.current_step,
-                                           horizon = 20)
-        state.append(loads-pv)
+                                           horizon = 96)
+
+        #with open('transformer.log', 'a') as f:
+        #    f.write(f'{tr.solar_power[env.current_step]} {pv[1]}\n')
+            #f.write(f'{loads[1]} {tr.inflexible_load[env.current_step]}\n')
+
+        #if env.current_step < len(tr.inflexible_load):
+            #print('loads:', loads[1], 'tr.inflexible_load:', tr.inflexible_load[env.current_step])
+            #print('pv:', pv[1], 'tr.solar_power:', tr.solar_power[env.current_step])
+            #env.load_difference_from_forecast += abs(loads[1] - tr.inflexible_load[env.current_step])
+            #env.pv_difference_from_forecast += abs(pv[1] - tr.solar_power[env.current_step])
+
+        #if env.current_step == 95:  
+        #    print(f'loads: {loads} \n pv: {pv} \n power_limits: {power_limits}')
+        state.append(loads)
+
+        state.append(pv)
         state.append(power_limits)
         
         # For every charging station connected to the transformer
@@ -142,16 +165,17 @@ def V2G_profit_max_loads(env, *args):
                     # If there is an EV connected
                     if EV is not None:
                         state.append([
-                            EV.get_soc(),
+                            max((EV.desired_capacity/EV.battery_capacity) - EV.get_soc(), 0),
+                            #EV.get_soc(),
                             EV.time_of_departure - env.current_step,
                             ])
+                        #print("EV soc: ", EV.get_soc(), "time to departure: ", EV.time_of_departure - env.current_step)
 
                     # else if there is no EV connected put zeros
                     else:
                         state.append(np.zeros(2))
 
     state = np.array(np.hstack(state))
-
     return state
     
 

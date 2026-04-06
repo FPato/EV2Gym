@@ -193,6 +193,7 @@ class EV2Gym(gym.Env):
 
         # Instatiate Transformers
         self.transformers = load_transformers(self)
+        #print(self.transformers[0].inflexible_load)
 
         # Instatiate Charging Stations
         self.charging_stations = load_ev_charger_profiles(self)
@@ -204,6 +205,12 @@ class EV2Gym(gym.Env):
         # Load EV spawn scenarios
         if self.load_from_replay_path is None:
             load_ev_spawn_scenarios(self)
+
+        self.info_reward_profit = 0
+        self.info_reward_overload = 0
+        self.info_reward_satisfaction = 0
+        self.load_difference_from_forecast = 0
+        self.pv_difference_from_forecast = 0
 
         self.price_data = None
         self.reset(seed=seed)
@@ -239,6 +246,24 @@ class EV2Gym(gym.Env):
 
         # Observation mask: is a vector of size ("Sum of all ports of all charging stations") showing in which ports an EV is connected
         self.observation_mask = np.zeros(self.number_of_ports)
+
+
+        if 'local_pv' in self.config['solar_power']:
+            self.local_pv = self.config['solar_power']['local_pv']
+        else:
+            self.local_pv = 0
+
+        self.current_pv_ratio = 0
+
+        self.info_how_much_charge = []
+        self.info_current_time = []
+        self.info_pv_output = []
+        self.info_ev_soc = []
+        self.info_actions = []
+        self.info_prices = []
+
+        
+
 
     def reset(self, seed=None, options=None, **kwargs):
         '''Resets the environment to its initial state'''
@@ -295,6 +320,13 @@ class EV2Gym(gym.Env):
         self.charge_prices, self.discharge_prices = load_electricity_prices(self)
         self.power_setpoints = load_power_setpoints(self)
 
+        #with open("log.txt", "a") as f:
+        #    f.write(str(self.info_reward_profit) + " " + str(-self.info_reward_overload) + " " + str(-self.info_reward_satisfaction) + "\n")
+
+        self.info_reward_profit = 0
+        self.info_reward_overload = 0
+        self.info_reward_satisfaction = 0
+
         self.EVs = []
         init_statistic_variables(self)
         
@@ -341,6 +373,20 @@ class EV2Gym(gym.Env):
             - done: is a boolean value indicating whether the episode is done or not
         '''
         assert not self.done, "Episode is done, please reset the environment"
+        #print("Actions: ", actions)
+        #print(f'current date: {self.sim_date.strftime("%Y-%m-%d %H:%M")}')
+        #print(f'pv ratio: {self.current_pv_ratio}')
+
+
+        #self.info_current_time.append(self.sim_date.strftime("%H:%M"))
+        #self.info_pv_output.append(self.local_pv * (self.current_pv_ratio/100))
+        #if self.charging_stations[0].evs_connected[0] is not None:
+        #    self.info_ev_soc.append(self.charging_stations[0].evs_connected[0].get_soc()*10)
+        #else:
+        #    self.info_ev_soc.append(0)
+        #self.info_actions.append(actions[0])
+        #self.info_prices.append(self.charge_prices[0,self.current_step]*-10)
+
 
         if self.verbose:
             print("-"*80)
@@ -358,14 +404,18 @@ class EV2Gym(gym.Env):
         # Reset current power of all transformers
         for tr in self.transformers:
             tr.reset(step=self.current_step)
-                
+
         # Call step for each charging station and spawn EVs where necessary
+        #print(self.EVs_profiles[0].get_soc(), self.charging_stations[0].evs_connected[0].current_capacity if self.charging_stations[0].evs_connected[0] is not None else None)
+        #print(self.local_pv, self.current_pv_ratio/100, self.sim_date.strftime("%Y-%m-%d %H:%M"))
         for i, cs in enumerate(self.charging_stations):
             n_ports = cs.n_ports
-            costs, user_satisfaction, invalid_action_punishment, ev = cs.step(
+            costs, user_satisfaction, invalid_action_punishment, ev= cs.step(
                 actions[port_counter:port_counter + n_ports],
                 self.charge_prices[cs.id, self.current_step],
-                self.discharge_prices[cs.id, self.current_step])
+                self.discharge_prices[cs.id, self.current_step], self)
+            #for idx, single_ev in enumerate(ev):
+            #    print(f"User satisfaction: {user_satisfaction[idx] if isinstance(user_satisfaction, list) and len(user_satisfaction) > idx else user_satisfaction}, EV SoC: {single_ev.get_soc()}, EV desired capacity: {single_ev.desired_capacity}, EV capacity at arrival: {single_ev.battery_capacity_at_arrival}")
 
             self.departing_evs += ev
 
@@ -383,6 +433,9 @@ class EV2Gym(gym.Env):
             self.current_ev_departed += len(user_satisfaction)
 
             port_counter += n_ports
+
+        #print(self.EVs_profiles[0].get_soc(), self.charging_stations[0].evs_connected[0].current_capacity if self.charging_stations[0].evs_connected[0] is not None else None, "\n")
+
 
         if self.simulate_grid:
             for tr in self.transformers:
@@ -412,6 +465,7 @@ class EV2Gym(gym.Env):
                 self.total_evs_spawned += 1
                 self.current_ev_arrived += 1
                 self.EVs.append(ev)
+                #print(f"Step {self.current_step}: EV {ev.id} arrived at charging station {ev.location} with departure time {ev.time_of_departure}")
 
             elif ev.time_of_arrival > self.current_step + 1:
                 break
@@ -430,6 +484,7 @@ class EV2Gym(gym.Env):
         reward = self._calculate_reward(total_costs,
                                         user_satisfaction_list,
                                         total_invalid_action_punishment)
+                                        #us_non_depart)
 
         if self.cost_function is not None:
             cost = self.cost_function(self,
@@ -442,9 +497,39 @@ class EV2Gym(gym.Env):
         if visualize:
             visualize_step(self)
 
+        #self.mock_reward(total_costs, user_satisfaction_list, total_invalid_action_punishment, us_non_depart)
+
         self.render()
 
         return self._check_termination(reward, cost)
+
+    def mock_reward(env, total_costs, user_satisfaction_list, *args):
+        # 1. Start with profit (The base goal)
+        reward = total_costs
+
+        # 2. Linear penalty for overloading (Less 'shocking' than 100x)
+        for tr in env.transformers:
+            # Penalty of 5-10 per kW is usually enough to teach respect for limits
+            reward -= 10 * tr.get_how_overloaded()
+
+            # 3. Logarithmic or Linear satisfaction (Keeps the signal alive until 100%)
+
+        for score in user_satisfaction_list:
+            # This keeps a steady pressure to reach 1.0 (100%)
+            reward -= 5 * (1 - score)
+
+        reward -= args[0] * 10
+
+        for us in args[1]:
+            reward -= 0.5 * (1 - us)
+
+        print(f"Reward breakdown: Total Costs: {total_costs}, "
+              f"Transformer Overload Penalty: {sum([10 * tr.get_how_overloaded() for tr in env.transformers])}, "
+              f"User Satisfaction Penalty: {sum([5*(1-score) for score in user_satisfaction_list])}, "
+              f"Total Reward: {reward}, "
+              f"invalid action punishment: {args[0] * 10}, "
+              f"us_non_depart penalty: {sum([0.5 * (1 - us) for us in args[1]])}")
+        return reward
 
     def _check_termination(self, reward, cost):
         '''Checks if the episode is done or any constraint is violated'''
@@ -515,7 +600,7 @@ class EV2Gym(gym.Env):
             print(f"Creating directory: ./results/{self.sim_name}")
             os.makedirs(f"./results/{self.sim_name}", exist_ok=True)
 
-        self.save_plots = save_plots
+        self.save_plots = save_plots3
 
     def _update_power_statistics(self, departing_evs):
         '''Updates the power statistics of the simulation'''
@@ -529,6 +614,8 @@ class EV2Gym(gym.Env):
                                      self.current_step] = tr.inflexible_load[self.current_step]
             self.tr_solar_power[tr.id,
                                 self.current_step] = tr.solar_power[self.current_step]
+            #print(f"Step {self.current_step}: Transformer {tr.id} has inflexible load {tr.inflexible_load[self.current_step]:.2f} kW, solar power {tr.solar_power[self.current_step]:.2f} kW and is overloaded by {tr.get_how_overloaded():.2f}%.")
+
 
         for cs in self.charging_stations:
             self.cs_power[cs.id, self.current_step] = cs.current_power_output

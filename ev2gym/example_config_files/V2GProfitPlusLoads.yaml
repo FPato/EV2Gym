@@ -4,29 +4,29 @@
 # Simulation Parameters
 ##############################################################################
 timescale: 15 # in minutes per step
-simulation_length: 112 #90 # in steps per simulation
+simulation_length: 96 #90 # in steps per simulation
 
 ##############################################################################
 # Date and Time
 ##############################################################################
 # Year, month, 
-year: 2022 # 2015-2023
+year: 2015 # 2015-2023
 month: 1 # 1-12
-day: 17 # 1-31
+day: 1 # 1-31
 # Whether to get a random date every time the environment is reset
 random_day: True # True or False
 random_hour: False # True or False
 
 # Simulation Starting Time
 # Hour and minute do not change after the environment has been reset
-hour: 5 # Simulation starting hour (24 hour format)
+hour: 0 # Simulation starting hour (24 hour format)
 minute: 0 # Simulation starting minute (0-59)
 
 # Simulate weekdays, weekends, or both
 simulation_days: weekdays # weekdays, weekends, or both
 
 # EV Spawn Behavior
-scenario: workplace # public, private, or workplace
+scenario: private # public, private, or workplace
 spawn_multiplier: 5 # 1 is default, the higher the number the more EVs spawn. Play somewhere between 3-7. With 1 often only 1/5 EVs show up.
 
 ##############################################################################
@@ -39,7 +39,7 @@ discharge_price_factor: 1 # how many times more abs(expensive/cheaper) it is to 
 # Distribution Network Settings
 ##############################################################################
 v2g_enabled: True # True or False
-number_of_charging_stations: 25 # Play somewhere 5-20
+number_of_charging_stations: 1 # Play somewhere 5-20
 number_of_transformers: 1 # if simulate_grid is True then this value is overwritten by the topology file
 number_of_ports_per_cs: 1
 # Provide path if you want to load a specific charging topology
@@ -87,6 +87,7 @@ solar_power:
   solar_power_capacity_multiplier_mean: 1 # 1 is default, the higher the number the more solar power
   forecast_mean: 20 # in percentage of load at time t%
   forecast_std: 5 # in percentage of load at time t%
+  local_pv: 8
 
 # Whether to include demand response in the transformer power limit
 demand_response:

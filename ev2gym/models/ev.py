@@ -111,6 +111,19 @@ class EV():
 
         self.calendar_loss = 0
         self.cyclic_loss = 0
+        
+        length_of_stay = self.time_of_departure - self.time_of_arrival + 1
+        max_energy_achievable_with_afap = length_of_stay * self.timescale / 60 * self.max_ac_charge_power
+
+        #print(f'EV SoC: {self.get_soc()}')
+
+        #print(f'EV length of stay: {length_of_stay}, current capacity: {battery_capacity_at_arrival/battery_capacity}, desired capacity: {self.desired_capacity/battery_capacity}, maximal capacity' + 
+        #f' achievable with AFAP: {(battery_capacity_at_arrival + max_energy_achievable_with_afap)/battery_capacity}')
+
+        if battery_capacity_at_arrival + max_energy_achievable_with_afap < desired_capacity:
+        #    print("PROBLEM: EV will not be able to charge to desired capacity with AFAP")
+            desired_capacity = battery_capacity_at_arrival + max_energy_achievable_with_afap
+
 
     def reset(self):
         '''

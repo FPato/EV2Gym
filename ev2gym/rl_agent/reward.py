@@ -32,15 +32,84 @@ def SqTrError_TrPenalty_UserIncentives(env, _, user_satisfaction_list, *args):
     return reward
 
 def ProfitMax_TrPenalty_UserIncentives(env, total_costs, user_satisfaction_list, *args):
-    
     reward = total_costs
     
+    overload_reward = 0
     for tr in env.transformers:
-        reward -= 100 * tr.get_how_overloaded()                        
+        overload_reward += 100 * tr.get_how_overloaded()
     
-    for score in user_satisfaction_list:        
-        reward -= 100 * math.exp(-10*score)
+    satisfaction_reward = 0
+    for score in user_satisfaction_list:
+        #reward -= 10 * (1 - score)
+        satisfaction_reward += 100 * math.exp(-10*score)
+
+    #env.info_reward_profit += total_costs
+    #env.info_reward_overload += overload_reward
+    #env.info_reward_satisfaction += satisfaction_reward
         
+    return reward - overload_reward - satisfaction_reward
+
+def ProfitMax_TrPenalty_UserIncentives_2(env, total_costs, user_satisfaction_list, invalid_action_punishment, *args):
+    reward = total_costs
+    
+    overload_reward = 0
+    for tr in env.transformers:
+        overload_reward -= 100 * tr.get_how_overloaded()                        
+    
+    satisfaction_reward = 0
+    for score in user_satisfaction_list:
+        #reward -= 10 * (1 - score)
+        satisfaction_reward -= 100 * math.exp(-8*score)
+
+    #env.info_reward_profit += total_costs
+    #env.info_reward_overload += overload_reward
+    #env.info_reward_satisfaction += satisfaction_reward
+        
+    return reward + overload_reward + satisfaction_reward - invalid_action_punishment * 10
+
+def ProfitMax_Balanced(env, total_profit, user_satisfaction_list, total_invalid_action_punishment, us_non_depart, *args):
+    # 1. Start with profit (The base goal)
+    reward = total_profit
+
+    # 2. Linear penalty for overloading (Less 'shocking' than 100x)
+    for tr in env.transformers:
+        # Penalty of 5-10 per kW is usually enough to teach respect for limits
+        reward -= 10 * tr.get_how_overloaded()
+
+        # 3. Logarithmic or Linear satisfaction (Keeps the signal alive until 100%)
+    for score in user_satisfaction_list:
+        # This keeps a steady pressure to reach 1.0 (100%)
+        reward -= 15 * (1 - score)
+
+    # invalid action punishment
+    reward -= total_invalid_action_punishment * 10
+
+    # penalize not charging when there is potential to charge
+    #for us in us_non_depart:
+    #    reward -= 0.15 * (1 - us)
+
+    #if reward < -100:
+    #    with open("log.txt", "a") as f:
+    #        f.write("---------------REWARD SPIKE---------------" + str(reward))
+    #        f.write(f"total profit: {total_profit}\n" +
+    #            f"overload: {sum([10*tr.get_how_overloaded() for tr in env.transformers])}\n" +
+    #            f"user satisfaction: {sum([15*(1-us) for us in user_satisfaction_list])}")
+    #        f.write("---------------------------------------------------\n")
+
+    return reward
+
+
+def ProfitMax_averaged(env, total_profit, user_satisfaction_list, total_invalid_action_punishment, us_non_depart, *args):    
+    reward = total_profit
+
+    for tr in env.transformers:
+        reward -= 2 * tr.get_how_overloaded()
+
+    for score in user_satisfaction_list:
+        reward -= ((1 - score) ** 3) * 5
+
+    reward -= total_invalid_action_punishment * 2
+
     return reward
 
 def SquaredTrackingErrorRewardWithPenalty(env,*args):
