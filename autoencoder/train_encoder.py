@@ -104,7 +104,7 @@ def _save_training_representation(
     recon: np.ndarray,
     latents: np.ndarray,
     ae: AE,
-    output_model: Path,
+    output_plot: Path,
 ) -> Path:
     # Decode explicitly from latent vectors (same path as reconstruct but shown separately).
     decoded = ae.decode(latents, denormalize=True)
@@ -132,145 +132,160 @@ def _save_training_representation(
     ax_sig.grid(alpha=0.3)
     ax_sig.legend()
 
-    plot_path = output_model.with_suffix(".training_plot.png")
+    plot_path = output_plot
     fig.savefig(plot_path, dpi=140)
     plt.close(fig)
     return plot_path
 
 
-def main_pipeline(signal_csv: str, signal_column: str, horizon: int, latent_dim: int, hidden_dims: list[int], activation: str, learning_rate: float, weight_decay: float, epochs: int, batch_size: int, val_split: float, seed: int, device: str, output_model: str, output_latents: str) -> None:
-    
-    signal = _load_series(
-        signal_csv,
-        column_selector=signal_column,
-    )
+def main_pipeline(signal_csv: str, signal_column: str, horizon: int, latent_dim: int, hidden_dims: list[int], activation: str, learning_rate: float, weight_decay: float, epochs: int, batch_size: int, val_split: float, seed: int, device: str, output_model: str, output_plot: str, output_latents: str) -> None:
+    best_val_loss = np.inf
+    best_train_loss = np.inf
 
-    #print(f"[AE train] signal shape={signal.shape}")
-
-    feature_matrix = AE.build_single_series_matrix(series=signal, horizon=horizon, stride=96)
-
-    #print(f"[AE train] feature_matrix=\n{feature_matrix.shape}")
-
-    input_dim = feature_matrix.shape[1]
-    if latent_dim >= input_dim:
-        raise ValueError(
-            f"latent_dim ({latent_dim}) must be < input_dim ({input_dim}). "
-            "Reduce latent size or increase number of signals/horizon."
+    for i in range(10):
+        signal = _load_series(
+            signal_csv,
+            column_selector=signal_column,
         )
 
-    ae = AE(
-        input_dim=input_dim,
-        latent_dim=latent_dim,
-        hidden_dims=hidden_dims,
-        activation=activation,
-        learning_rate=learning_rate,
-        weight_decay=weight_decay,
-        device=device,
-        seed=seed,
-    )
+        signal = signal * -100 * np.random.normal(1, 0.1) # ONLY IN SOLAR
+        #signal = signal / 1000  # ONLY IN PRICES
+        
+        feature_matrix = AE.build_single_series_matrix(series=signal, horizon=horizon, stride=96)
 
-    out_model = Path(output_model)
-    out_model.parent.mkdir(parents=True, exist_ok=True)
+        input_dim = feature_matrix.shape[1]
+        if latent_dim >= input_dim:
+            raise ValueError(
+                f"latent_dim ({latent_dim}) must be < input_dim ({input_dim}). "
+                "Reduce latent size or increase number of signals/horizon."
+            )
 
-    #print(f"[AE train] feature_matrix shape={feature_matrix.shape}")
-    history = ae.fit(
-        x=feature_matrix,
-        epochs=epochs,
-        batch_size=batch_size,
-        val_split=val_split,
-        verbose=True,
-        best_checkpoint_path=out_model,
-    )
+        ae = AE(
+            input_dim=input_dim,
+            latent_dim=latent_dim,
+            hidden_dims=hidden_dims,
+            activation=activation,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            device=device,
+            seed=seed,
+        )
 
-    # Reload to ensure reported metrics/latents come from the saved best checkpoint.
-    ae = AE.load(out_model, device=device)
-    latents = ae.encode(feature_matrix)
-    recon = ae.reconstruct(feature_matrix)
-    mse = float(np.mean((recon - feature_matrix) ** 2))
-    plot_path = _save_training_representation(
-        history=history,
-        feature_matrix=feature_matrix,
-        recon=recon,
-        latents=latents,
-        ae=ae,
-        output_model=out_model,
-    )
+        out_model = Path(output_model)
+        out_model.parent.mkdir(parents=True, exist_ok=True)
 
-    if output_latents:
-        out_latents = Path(output_latents)
-        out_latents.parent.mkdir(parents=True, exist_ok=True)
-        np.save(str(out_latents), latents)
-        print(f"[AE train] Saved latents to: {out_latents} | shape={latents.shape}")
+        #print(f"[AE train] feature_matrix shape={feature_matrix.shape}")
+        history = ae.fit(
+            x=feature_matrix,
+            epochs=epochs,
+            batch_size=batch_size,
+            val_split=val_split,
+            verbose=False,
+            best_checkpoint_path=out_model,
+        )
 
-    final_train = history["train_loss"][-1] if history["train_loss"] else float("nan")
-    final_val = history["val_loss"][-1] if history["val_loss"] else float("nan")
+        # Reload to ensure reported metrics/latents come from the saved best checkpoint.
+        ae = AE.load(out_model, device=device)
+        latents = ae.encode(feature_matrix)
+        recon = ae.reconstruct(feature_matrix)
+        mse = float(np.mean((recon - feature_matrix) ** 2))
+        
 
-    print("===================================================")
-    print(f"[AE train] Model saved to: {out_model}")
-    print(f"[AE train] Signal CSV: {signal_csv}")
-    print(f"[AE train] Latent shape: {latents.shape}")
-    print(f"[AE train] Final train loss: {final_train:.6f}")
-    print(f"[AE train] Final val loss:   {final_val:.6f}")
-    print(f"[AE train] Reconstruction MSE (denormalized): {mse:.6f}")
-    print(f"[AE train] Training representation saved to: {plot_path}")
-    print("===================================================")
+        if output_latents:
+            out_latents = Path(output_latents)
+            out_latents.parent.mkdir(parents=True, exist_ok=True)
+            np.save(str(out_latents), latents)
+            print(f"[AE train] Saved latents to: {out_latents} | shape={latents.shape}")
+
+        final_train = history["train_loss"][-1] if history["train_loss"] else float("nan")
+        final_val = history["val_loss"][-1] if history["val_loss"] else float("nan")
+
+        if final_val < best_val_loss:
+            print(f"Best val loss updated: {final_val:.6f}")
+            best_val_loss = final_val
+            best_train_loss = final_train
+            plot_path = _save_training_representation(
+                history=history,
+                feature_matrix=feature_matrix,
+                recon=recon,
+                latents=latents,
+                ae=ae,
+                output_plot=output_plot,
+            )
+
+        print("===================================================")
+        print(f"[AE train] Model saved to: {out_model}")
+        print(f"[AE train] Signal CSV: {signal_csv}")
+        print(f"[AE train] Latent shape: {latents.shape}")
+        print(f"[AE train] Final train loss: {final_train:.6f}")
+        print(f"[AE train] Final val loss:   {final_val:.6f}")
+        print(f"[AE train] Reconstruction MSE (denormalized): {mse:.6f}")
+        print(f"[AE train] Training representation saved to: {plot_path}")
+        print("===================================================")
+    
+    with open(f"autoencoder/log_N.txt", "a") as f:
+        f.write(f"best value loss: {best_val_loss:.6f}\nbest train loss: {best_train_loss:.6f}\nsaved to: {out_model}\n\n")
 
 
 
-def train_for_solar():
+def train_for_solar(latent_dim: int):
     main_pipeline(signal_csv="ev2gym/data/pv_netherlands.csv", #"ev2gym/data/test/pv_encode_test.csv",
         signal_column="2", 
         horizon=96, 
-        latent_dim=2,
-        hidden_dims=[256, 128], 
+        latent_dim=latent_dim,
+        hidden_dims=[64, 32], 
         activation="relu", 
         learning_rate=1e-3, 
         weight_decay=0.0, 
-        epochs=700, 
+        epochs=500, 
         batch_size=64, 
         val_split=0.1, 
         seed=random.randint(0, 1000000), #42, 
         device=None, 
-        output_model="autoencoder/models/solar_ae_to2dim.pt", 
+        output_model=f"autoencoder/models/N_solar_ae_to{latent_dim}dim.pt", 
+        output_plot=f"autoencoder/plots/N_solar_ae_to{latent_dim}dim.training_plot.png",
         output_latents="")
 
 
-def train_for_prices():
+def train_for_prices(latent_dim: int):
     main_pipeline(signal_csv="ev2gym/data/Netherlands_day-ahead-2015-2024.csv",
         signal_column="3",
         horizon=96,
-        latent_dim=2,
-        hidden_dims=[256, 128],
+        latent_dim=latent_dim,
+        hidden_dims=[64, 32],
         activation="relu",
         learning_rate=1e-3,
         weight_decay=0.0,
-        epochs=700,
+        epochs=500,
         batch_size=64,
         val_split=0.1,
         seed=random.randint(0, 1000000), #42, 
         device=None, 
-        output_model="autoencoder/models/prices_ae_to2dim.pt", 
+        output_model=f"autoencoder/models/N_prices_ae_to{latent_dim}dim.pt", 
+        output_plot=f"autoencoder/plots/N_prices_ae_to{latent_dim}dim.training_plot.png",
         output_latents="")
 
 
-def train_for_loads():
+def train_for_loads(latent_dim: int):
     main_pipeline(signal_csv="ev2gym/data/residential_loads.csv",
         signal_column="sample10sum",
         horizon=96,
-        latent_dim=2,
-        hidden_dims=[256, 128],
+        latent_dim=latent_dim,
+        hidden_dims=[64, 32],
         activation="relu",
         learning_rate=1e-3,
         weight_decay=0.0,
-        epochs=700,
+        epochs=500,
         batch_size=64,
         val_split=0.1,
         seed=random.randint(0, 1000000), #42, 
         device=None, 
-        output_model="autoencoder/models/loads_ae_to2dim.pt", 
+        output_model=f"autoencoder/models/N_loads_ae_to{latent_dim}dim.pt", 
+        output_plot=f"autoencoder/plots/N_loads_ae_to{latent_dim}dim.training_plot.png",
         output_latents="")
 
 if __name__ == "__main__":
-    train_for_solar()
-    train_for_prices()
-    train_for_loads()
+    train_for_solar(latent_dim=2)
+    #train_for_prices(latent_dim=16)
+    #train_for_loads(latent_dim=16)
+

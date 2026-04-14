@@ -1,6 +1,12 @@
 '''  This file contains various example state functions for the RL agent '''
 import math
 import numpy as np
+import matplotlib.pyplot as plt
+
+def quick_plot(values, name: str):
+    plt.plot(range(len(values)), values)
+    plt.savefig(f'my_plots/{name}.png')
+    plt.close()
 
 
 def PublicPST(env, *args):
@@ -122,13 +128,20 @@ def V2G_profit_max_loads(env, *args):
     
     if len(charge_prices) < 96:
         charge_prices = np.append(charge_prices, np.zeros(96-len(charge_prices)))
+
+    print(f"charge_prices: {charge_prices[:10]}")
+
     
-    state.append(charge_prices)
+    prices_encoded = env.prices_ae.encode(charge_prices)[0]
+
+    state.append(prices_encoded)
     
+
     # For every transformer
     for tr in env.transformers:
         loads, pv = tr.get_load_pv_forecast(step = env.current_step,
                                             horizon = 96)
+
         if pv[0] < -100:
             env.current_pv_ratio = 100
         elif pv[0] > 0:
@@ -139,21 +152,22 @@ def V2G_profit_max_loads(env, *args):
         power_limits = tr.get_power_limits(step = env.current_step,
                                            horizon = 96)
 
-        #with open('transformer.log', 'a') as f:
-        #    f.write(f'{tr.solar_power[env.current_step]} {pv[1]}\n')
-            #f.write(f'{loads[1]} {tr.inflexible_load[env.current_step]}\n')
 
-        #if env.current_step < len(tr.inflexible_load):
-            #print('loads:', loads[1], 'tr.inflexible_load:', tr.inflexible_load[env.current_step])
-            #print('pv:', pv[1], 'tr.solar_power:', tr.solar_power[env.current_step])
-            #env.load_difference_from_forecast += abs(loads[1] - tr.inflexible_load[env.current_step])
-            #env.pv_difference_from_forecast += abs(pv[1] - tr.solar_power[env.current_step])
+        #if env.current_step == 0:
+        #    forecated_load_sum = 0
+        #    actual_load_sum = 0
+        #    for i in range(len(loads)):
+        #        forecated_load_sum += abs(loads[i])
+        #        actual_load_sum += abs(tr.inflexible_load[i])
+        #    print(f'difference: {forecated_load_sum/len(loads) - actual_load_sum/len(loads)}')
 
-        #if env.current_step == 95:  
-        #    print(f'loads: {loads} \n pv: {pv} \n power_limits: {power_limits}')
-        state.append(loads)
 
-        state.append(pv)
+        loads_encoded = env.load_ae.encode(loads)[0]
+        
+        pv_encoded = env.pv_ae.encode(pv)[0]
+
+        state.append(loads_encoded)
+        state.append(pv_encoded)
         state.append(power_limits)
         
         # For every charging station connected to the transformer
@@ -175,7 +189,9 @@ def V2G_profit_max_loads(env, *args):
                     else:
                         state.append(np.zeros(2))
 
-    state = np.array(np.hstack(state))
+
+    #print(f'loads: {loads}\nloads_encoded: {env.load_ae.encode(loads)[0]}')
+    state = np.array(np.hstack(state))        
     return state
     
 

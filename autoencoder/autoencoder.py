@@ -88,7 +88,7 @@ class AEConfig:
     epochs: int = 200
     batch_size: int = 64
     val_split: float = 0.1
-    seed: int = 42
+    seed: int = None
 
 
 class AE:
@@ -110,7 +110,7 @@ class AE:
         learning_rate: float = 1e-3,
         weight_decay: float = 0.0,
         device: Optional[str] = None,
-        seed: int = 42,
+        seed: int = None,
     ) -> None:
         self.config = AEConfig(
             input_dim=input_dim,
@@ -126,8 +126,8 @@ class AE:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = torch.device(device)
 
-        torch.manual_seed(seed)
-        np.random.seed(seed)
+        #torch.manual_seed(seed)
+        #np.random.seed(seed)
 
         self.model = _MLPAutoencoder(
             input_dim=input_dim,
@@ -181,65 +181,6 @@ class AE:
             return arr.astype(np.float32)
         raise ValueError(f"series must be 1D or 2D, got shape {arr.shape}")
 
-    @classmethod
-    def build_feature_matrix(
-        cls,
-        pv: ArrayLike,
-        inflexible_load: ArrayLike,
-        other_series: Optional[
-            Union[Dict[str, ArrayLike], Sequence[ArrayLike], ArrayLike]
-        ] = None,
-        horizon: Optional[int] = None,
-    ) -> np.ndarray:
-        """Builds [N, D] training/inference matrix from forecast sequences.
-
-        Args:
-            pv: PV forecast windows or a 1D full series.
-            inflexible_load: Load forecast windows or a 1D full series.
-            other_series: Optional extra forecast series/windows (price, limits,
-                weather, etc). Can be dict/list/array.
-            horizon: Required only when any input is 1D full series. In that case,
-                rolling windows of length `horizon` are created.
-        """
-
-        def to_windows(name: str, arr_like: ArrayLike) -> np.ndarray:
-            arr = np.asarray(arr_like, dtype=np.float32)
-            if arr.ndim == 1:
-                if horizon is None:
-                    raise ValueError(
-                        f"horizon is required when {name} is provided as 1D series."
-                    )
-                return cls._rolling_windows(arr, horizon=horizon)
-            if arr.ndim == 2:
-                return arr.astype(np.float32)
-            raise ValueError(f"{name} must be 1D or 2D, got shape {arr.shape}")
-
-        blocks: List[np.ndarray] = [
-            to_windows("pv", pv),
-            to_windows("inflexible_load", inflexible_load),
-        ]
-
-        if other_series is not None:
-            if isinstance(other_series, dict):
-                other_iter: Iterable[Tuple[str, ArrayLike]] = other_series.items()
-            elif isinstance(other_series, (list, tuple)):
-                other_iter = ((f"other_{i}", arr) for i, arr in enumerate(other_series))
-            else:
-                other_iter = (("other", other_series),)
-
-            for key, arr in other_iter:
-                blocks.append(to_windows(str(key), arr))
-
-        n_samples = blocks[0].shape[0]
-        for idx, block in enumerate(blocks[1:], start=1):
-            if block.shape[0] != n_samples:
-                raise ValueError(
-                    f"All series must have same number of samples/windows. "
-                    f"Block 0 has {n_samples}, block {idx} has {block.shape[0]}."
-                )
-
-        return np.concatenate(blocks, axis=1).astype(np.float32)
-
     def _fit_scaler(self, x: np.ndarray) -> None:
         self._mean = x.mean(axis=0)
         std = x.std(axis=0)
@@ -258,6 +199,7 @@ class AE:
         val_split: float = 0.1,
         verbose: bool = True,
         best_checkpoint_path: Optional[Union[str, Path]] = None,
+        best_val_loss: float = np.inf,
     ) -> Dict[str, List[float]]:
         """Train the autoencoder on a pre-built [N, D] matrix."""
         x = self._as_2d_array(x, "x")
@@ -337,13 +279,8 @@ class AE:
             metric = val_loss if not np.isnan(val_loss) else train_loss
             if checkpoint_path is not None and metric < best_metric:
                 best_metric = metric
-                payload = {
-                    "state_dict": self.model.state_dict(),
-                    "config": self.config.__dict__,
-                    "mean": self._mean.astype(np.float32),
-                    "std": self._std.astype(np.float32),
-                }
-                torch.save(payload, str(checkpoint_path))
+                if metric < best_val_loss:
+                    self.save(checkpoint_path)
 
             if verbose and (epoch == 0 or (epoch + 1) % 25 == 0 or epoch + 1 == epochs):
                 if np.isnan(val_loss):
@@ -358,53 +295,6 @@ class AE:
 
         self._is_fitted = True
         return history
-
-    def fit_from_forecasts(
-        self,
-        pv: ArrayLike,
-        inflexible_load: ArrayLike,
-        other_series: Optional[
-            Union[Dict[str, ArrayLike], Sequence[ArrayLike], ArrayLike]
-        ] = None,
-        horizon: Optional[int] = None,
-        epochs: int = 200,
-        batch_size: int = 64,
-        val_split: float = 0.1,
-        verbose: bool = True,
-    ) -> Dict[str, List[float]]:
-        """Build matrix from forecast series/windows and train AE."""
-        x = self.build_feature_matrix(
-            pv=pv,
-            inflexible_load=inflexible_load,
-            other_series=other_series,
-            horizon=horizon,
-        )
-        return self.fit(
-            x=x,
-            epochs=epochs,
-            batch_size=batch_size,
-            val_split=val_split,
-            verbose=verbose,
-        )
-
-    def fit_single_series(
-        self,
-        series: ArrayLike,
-        horizon: Optional[int] = None,
-        epochs: int = 200,
-        batch_size: int = 64,
-        val_split: float = 0.1,
-        verbose: bool = True,
-    ) -> Dict[str, List[float]]:
-        """Train AE on one signal type (solar OR loads OR prices)."""
-        x = self.build_single_series_matrix(series=series, horizon=horizon)
-        return self.fit(
-            x=x,
-            epochs=epochs,
-            batch_size=batch_size,
-            val_split=val_split,
-            verbose=verbose,
-        )
 
     def encode(self, x: np.ndarray) -> np.ndarray:
         """Encode [N, D] input into [N, latent_dim]."""
@@ -442,59 +332,8 @@ class AE:
         """Convenience method: reconstruct input matrix x."""
         return self.decode(self.encode(x), denormalize=True)
 
-    def encode_forecasts(
-        self,
-        pv: ArrayLike,
-        inflexible_load: ArrayLike,
-        other_series: Optional[
-            Union[Dict[str, ArrayLike], Sequence[ArrayLike], ArrayLike]
-        ] = None,
-        horizon: Optional[int] = None,
-    ) -> np.ndarray:
-        """Build feature matrix from forecasts and return latent vectors."""
-        x = self.build_feature_matrix(
-            pv=pv,
-            inflexible_load=inflexible_load,
-            other_series=other_series,
-            horizon=horizon,
-        )
-        return self.encode(x)
-
-    def encode_single_series(
-        self,
-        series: ArrayLike,
-        horizon: Optional[int] = None,
-    ) -> np.ndarray:
-        """Encode one signal type into latent vectors."""
-        x = self.build_single_series_matrix(series=series, horizon=horizon)
-        return self.encode(x)
-
-    def encode_state_features(
-        self,
-        pv_forecast_window: ArrayLike,
-        load_forecast_window: ArrayLike,
-        other_windows: Optional[
-            Union[Dict[str, ArrayLike], Sequence[ArrayLike], ArrayLike]
-        ] = None,
-    ) -> np.ndarray:
-        """Encode a single state forecast window into one latent vector.
-
-        This is the method to call inside state-generation code at each env step.
-        Inputs can be shape [H] or [1, H].
-        Returns shape [latent_dim].
-        """
-        latent = self.encode_forecasts(
-            pv=pv_forecast_window,
-            inflexible_load=load_forecast_window,
-            other_series=other_windows,
-            horizon=None,
-        )
-        return latent[0]
-
     def save(self, path: Union[str, Path]) -> None:
         """Save model + normalization metadata."""
-        if not self._is_fitted:
-            raise RuntimeError("Cannot save an untrained AE.")
         if self._mean is None or self._std is None:
             raise RuntimeError("Normalization parameters are missing.")
         payload = {

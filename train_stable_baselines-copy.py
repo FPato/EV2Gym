@@ -21,56 +21,6 @@ import random
 import numpy as np
 import torch
 
-class VerboseEvalCallback(EvalCallback):
-    def _get_single_eval_env(self):
-        if hasattr(self.eval_env, "envs") and len(self.eval_env.envs) > 0:
-            return self.eval_env.envs[0]
-        return self.eval_env
-
-    def _on_step(self) -> bool:
-        will_eval = self.eval_freq > 0 and self.n_calls % self.eval_freq == 0
-        single_eval_env = None
-        original_reset = None
-        eval_episode_counter = {"count": 0}
-
-        if will_eval:
-            print(
-                f"[EvalCallback] START eval at train_step={self.num_timesteps}, "
-                f"n_eval_episodes={self.n_eval_episodes}"
-            )
-            single_eval_env = self._get_single_eval_env()
-            original_reset = single_eval_env.reset
-
-            def reset_with_day(*args, **kwargs):
-                obs, info = original_reset(*args, **kwargs)
-                eval_episode_counter["count"] += 1
-
-                if eval_episode_counter["count"] <= 10:
-                    base_env = single_eval_env.unwrapped
-                    sim_date = getattr(base_env, "sim_starting_date", None)
-                    sampled_seed = getattr(base_env, "seed", None)
-                    day_str = sim_date.strftime("%Y-%m-%d %A %H:%M") if sim_date is not None else "N/A"
-                    print(
-                        f"[Eval episode {eval_episode_counter['count']}/10] "
-                        f"day={day_str}, sampled_seed={sampled_seed}"
-                    )
-                return obs, info
-
-            single_eval_env.reset = reset_with_day
-
-        ok = super()._on_step()
-
-        if will_eval and single_eval_env is not None and original_reset is not None:
-            single_eval_env.reset = original_reset
-
-        if will_eval:
-            print(
-                f"[EvalCallback] END eval at train_step={self.num_timesteps}, "
-                f"last_mean_reward={self.last_mean_reward:.4f}, "
-                f"best_mean_reward={self.best_mean_reward:.4f}"
-            )
-        return ok
-
 
 def set_global_seeds(seed: int) -> None:
     os.environ["PYTHONHASHSEED"] = str(seed)
@@ -96,7 +46,7 @@ if __name__ == "__main__":
                         # default="ev2gym/example_config_files/V2GProfitMax.yaml")
                         default="ev2gym/example_config_files/V2GProfitPlusLoads.yaml")
     args = parser.parse_args()
-    seeds = [random.randint(1, 1000000)] #[42, 123, 456] #789, 1011]
+    seeds = [random.randint(1, 1000000), random.randint(1, 1000000), random.randint(1, 1000000)] #[658710]
     for seed in seeds:
         algorithm = args.algorithm
         device = args.device
@@ -120,7 +70,7 @@ if __name__ == "__main__":
             state_function = V2G_profit_max_loads
             group_name = f'{config["number_of_charging_stations"]}cs_V2GProfitPlusLoads'
 
-        run_name += f'SETSEED_{seed}_{algorithm}_{reward_function.__name__}_{state_function.__name__}_v43_perfect_forecast_fixed_forecast_endings'
+        run_name += f'SETSEED_{seed}_{algorithm}_{reward_function.__name__}_{state_function.__name__}_v45_all_encoded_fixed'
 
         run = wandb.init(project='ev2gym-base',
                         sync_tensorboard=True,

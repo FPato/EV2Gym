@@ -32,6 +32,7 @@ from ev2gym.visuals.render import Renderer
 from ev2gym.rl_agent.reward import SquaredTrackingErrorReward
 from ev2gym.rl_agent.state import PublicPST
 
+from autoencoder.autoencoder import AE
 
 class EV2Gym(gym.Env):
 
@@ -98,6 +99,13 @@ class EV2Gym(gym.Env):
         if self.tr_seed == -1:
             self.tr_seed = self.seed
         self.tr_rng = np.random.default_rng(seed=self.tr_seed)
+
+        
+        self.pv_ae = AE.load('autoencoder/models/N_solar_ae_to8dim.pt')
+        self.load_ae = AE.load('autoencoder/models/loads_ae_to8dim.pt')
+        self.prices_ae = AE.load('autoencoder/models/N_prices_ae_to4dim.pt')
+
+        self.horizon = 96
 
         if load_from_replay_path is not None:
             with open(load_from_replay_path, 'rb') as file:
@@ -497,39 +505,11 @@ class EV2Gym(gym.Env):
         if visualize:
             visualize_step(self)
 
-        #self.mock_reward(total_costs, user_satisfaction_list, total_invalid_action_punishment, us_non_depart)
-
         self.render()
 
         return self._check_termination(reward, cost)
 
-    def mock_reward(env, total_costs, user_satisfaction_list, *args):
-        # 1. Start with profit (The base goal)
-        reward = total_costs
 
-        # 2. Linear penalty for overloading (Less 'shocking' than 100x)
-        for tr in env.transformers:
-            # Penalty of 5-10 per kW is usually enough to teach respect for limits
-            reward -= 10 * tr.get_how_overloaded()
-
-            # 3. Logarithmic or Linear satisfaction (Keeps the signal alive until 100%)
-
-        for score in user_satisfaction_list:
-            # This keeps a steady pressure to reach 1.0 (100%)
-            reward -= 5 * (1 - score)
-
-        reward -= args[0] * 10
-
-        for us in args[1]:
-            reward -= 0.5 * (1 - us)
-
-        print(f"Reward breakdown: Total Costs: {total_costs}, "
-              f"Transformer Overload Penalty: {sum([10 * tr.get_how_overloaded() for tr in env.transformers])}, "
-              f"User Satisfaction Penalty: {sum([5*(1-score) for score in user_satisfaction_list])}, "
-              f"Total Reward: {reward}, "
-              f"invalid action punishment: {args[0] * 10}, "
-              f"us_non_depart penalty: {sum([0.5 * (1 - us) for us in args[1]])}")
-        return reward
 
     def _check_termination(self, reward, cost):
         '''Checks if the episode is done or any constraint is violated'''

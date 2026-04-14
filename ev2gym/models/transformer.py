@@ -17,8 +17,8 @@ class Transformer():
                  env,
                  max_power=100,  # The maximum power of the transformer in kW
                  cs_ids=[],  # the charging stations connected to the transformer
-                 inflexible_load=np.zeros(96),
-                 solar_power=np.zeros(96),
+                 inflexible_load=None,
+                 solar_power=None,
                  simulation_length=96
                  ):
         """
@@ -32,18 +32,22 @@ class Transformer():
         :type cs_ids: list, optional
         :param timescale: the timescale of the simulation, defaults to 5
         :type timescale: int, optional
-
         """
+
+        if inflexible_load is None:
+            inflexible_load = np.zeros(simulation_length + env.horizon)
+        if solar_power is None:
+            solar_power = np.zeros(simulation_length + env.horizon)
 
         self.id = id
         self.voltage = env.config['charging_station']['voltage'] * \
             math.sqrt(env.config['charging_station']['phases'])
         max_current = max_power * 1000 / self.voltage
 
-        self.max_current = np.ones(simulation_length + 96)*max_current
-        self.min_current = np.ones(simulation_length + 96) * -max_current
-        self.max_power = np.ones(simulation_length + 96)*max_power
-        self.min_power = np.ones(simulation_length + 96) * -max_power
+        self.max_current = np.ones(simulation_length + env.horizon)*max_current
+        self.min_current = np.ones(simulation_length + env.horizon) * -max_current
+        self.max_power = np.ones(simulation_length + env.horizon)*max_power
+        self.min_power = np.ones(simulation_length + env.horizon) * -max_power
 
         self.inflexible_load = inflexible_load
         self.solar_power = solar_power
@@ -56,12 +60,12 @@ class Transformer():
 
         self.current_step = 0
 
-        self.inflexible_load_forecast = np.zeros(env.simulation_length + 96)
+        self.inflexible_load_forecast = np.zeros(env.simulation_length + env.horizon)
         if env.config['inflexible_loads']['include']:
             self.normalize_inflexible_loads(env)
             self.generate_inflexible_loads_forecast(env)
 
-        self.pv_generation_forecast = np.zeros(env.simulation_length)
+        self.pv_generation_forecast = np.zeros(env.simulation_length + env.horizon)
         if env.config['solar_power']['include']:
             self.normalize_pv_generation(env)
             self.generate_pv_generation_forecast(env)
@@ -191,13 +195,13 @@ class Transformer():
         '''
         Normalize the solar_power using the configuration file and teh max_power of the transformer
         '''
-        #print(f'Solar power: {self.solar_power}')
+        #print(f'Solar power: {self.solar_power[40]}')
         if env.config['solar_power']['include']:
             mult = env.config['solar_power']['solar_power_capacity_multiplier_mean']
             mult = env.tr_rng.normal(mult, 0.1)
             self.solar_power = -self.solar_power * \
                 mult * max(self.max_power)
-        #print(f'Solar power: {self.solar_power}')
+        #print(f'Solar power: {self.solar_power[40]}')
         #print('--------------------------------')
 
     def generate_pv_generation_forecast(self, env) -> None:
@@ -210,10 +214,10 @@ class Transformer():
         forecast_uncertainty_std = env.config['solar_power']['forecast_std'] / 100 * \
             self.solar_power
 
-        self.pv_generation_forecast = np.random.normal(
-            forecast_uncertainty_mean,
-            abs(forecast_uncertainty_std),
-            len(self.solar_power))
+        #self.pv_generation_forecast = np.random.normal(
+        #    forecast_uncertainty_mean,
+        #    abs(forecast_uncertainty_std),
+        #    len(self.solar_power))
 
         self.pv_generation_forecast = self.solar_power
 
@@ -238,7 +242,7 @@ class Transformer():
                 elif self.inflexible_load[j] < self.min_power[j]:
                     self.inflexible_load[j] = self.min_power[j]
 
-        self.generate_inflexible_loads_forecast(env)
+        #self.generate_inflexible_loads_forecast(env)
 
     def generate_inflexible_loads_forecast(self, env) -> None:
         '''
@@ -250,15 +254,18 @@ class Transformer():
         forecast_uncertainty_std = env.config['inflexible_loads']['forecast_std'] / 100 * \
             self.inflexible_load
 
-        self.inflexible_load_forecast = np.random.normal(
-            forecast_uncertainty_mean,
-            forecast_uncertainty_std,
-            len(self.inflexible_load))
+        #self.inflexible_load_forecast = np.random.normal(
+        #    forecast_uncertainty_mean,
+        #    forecast_uncertainty_std,
+        #    len(self.inflexible_load))
+
 
         # clip the forecast to the min and max power
         self.inflexible_load_forecast = np.clip(self.inflexible_load_forecast,
                                                 self.min_power,
                                                 self.max_power)
+
+        #print(f'set inflexible load forecast to inflexible load', len(self.inflexible_load_forecast))
 
         self.inflexible_load_forecast = self.inflexible_load
 
