@@ -1,32 +1,64 @@
-best value loss: 0.026960
-best train loss: 0.026028
+best value loss: 0.180931
+best train loss: 0.174914
+saved to: autoencoder/models/N_loads_ae_to2dim.pt
+
+best value loss: 0.147592
+best train loss: 0.146626
+saved to: autoencoder/models/N_loads_ae_to4dim.pt
+
+best value loss: 0.106726
+best train loss: 0.102986
+saved to: autoencoder/models/N_loads_ae_to8dim.pt
+
+best value loss: 0.101484
+best train loss: 0.100791
+saved to: autoencoder/models/N_loads_ae_to16dim.pt
+
+best value loss: 0.038727
+best train loss: 0.038715
 saved to: autoencoder/models/N_prices_ae_to2dim.pt
 
-best value loss: 0.012436
-best train loss: 0.009075
+best value loss: 0.016257
+best train loss: 0.018413
 saved to: autoencoder/models/N_prices_ae_to4dim.pt
 
-best value loss: 0.002994
-best train loss: 0.002723
+best value loss: 0.009253
+best train loss: 0.009417
 saved to: autoencoder/models/N_prices_ae_to8dim.pt
 
-best value loss: 0.001459
-best train loss: 0.001767
+best value loss: 0.007315
+best train loss: 0.008448
 saved to: autoencoder/models/N_prices_ae_to16dim.pt
 
-best value loss: 0.003024
-best train loss: 0.002471
-saved to: autoencoder/models/N_solar_ae_to16dim.pt
+best value loss: 0.034468
+best train loss: 0.061659
+saved to: autoencoder/models/N_solar_ae_to2dim.pt
 
-best value loss: 0.004891
-best train loss: 0.003832
-saved to: autoencoder/models/N_solar_ae_to8dim.pt
-
-best value loss: 0.008503
-best train loss: 0.009254
+best value loss: 0.016218
+best train loss: 0.019751
 saved to: autoencoder/models/N_solar_ae_to4dim.pt
 
-best value loss: 0.033724
-best train loss: 0.034023
-saved to: autoencoder/models/N_solar_ae_to2dim.pt
+best value loss: 0.015400
+best train loss: 0.023467
+saved to: autoencoder/models/N_solar_ae_to8dim.pt
+
+best value loss: 0.014571
+best train loss: 0.019010
+saved to: autoencoder/models/N_solar_ae_to16dim.pt
+
+best value loss: 0.000743
+best train loss: 0.000705
+saved to: autoencoder/models/N_solar_ae_to8dim.pt
+
+best value loss: 0.000798
+best train loss: 0.000674
+saved to: autoencoder/models/N_solar_ae_to8dim.pt
+
+best value loss: 0.000682
+best train loss: 0.000754
+saved to: autoencoder/models/N_solar_ae_to8dim.pt
+
+best value loss: 0.000839
+best train loss: 0.000762
+saved to: autoencoder/models/N_solar_ae_to8dim.pt
 

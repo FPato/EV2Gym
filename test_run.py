@@ -57,7 +57,7 @@ if __name__ == "__main__":
     #print(f"SAC critic qf1: {model.policy.critic.qf1}")
 
 
-    save_path = "saved_models/1cs_V2GProfitPlusLoads/SETSEED_123_sac_ProfitMax_TrPenalty_UserIncentives_2_V2G_profit_max_loads_v42_perfect_forecast"
+    save_path = "saved_models/1cs_V2GProfitPlusLoads/DEBUG-SETSEED_865413_sac_ProfitMax_TrPenalty_UserIncentives_2_V2G_profit_max_loads_v49_fix_all_ae_dist"
 
     #print(f"PATH: {save_path}/best_model.zip")
     model = model.load(f"{save_path}/best_model", env=env)
@@ -112,7 +112,7 @@ if __name__ == "__main__":
 
     plt.legend()
     plt.subplots_adjust(bottom=0.2)
-    #plt.savefig("my_plots/plot_charge_v42_setseed_123_CHAOTIC.png")
+    plt.savefig("my_plots/plot_charge_v49_setseed_865413_CHAOTIC.png")
 
     # print average stats
     print("=====================================================")

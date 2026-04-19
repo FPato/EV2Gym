@@ -106,7 +106,7 @@ def get_statistics(env) -> Dict:
              'info_prices': env.info_prices,
              'info_reward_profit': env.info_reward_profit,
              'info_reward_overload': env.info_reward_overload,
-             'info_reward_satisfaction': env.info_reward_satisfaction
+             'info_reward_satisfaction': env.info_reward_satisfaction,
              }
 
     if env.simulate_grid:
@@ -234,6 +234,8 @@ def spawn_single_EV(env,
     else:
         #print(f"Battery capacity: {battery_capacity} is greater than required energy: {required_energy}")
         initial_battery_capacity = battery_capacity - required_energy
+        #initial_battery_capacity = np.random.randint(1, battery_capacity)
+        # UNCOMMENT FOR FIXED BATTERY CAPACITY NORMAL DISTRIBUTION v49
 
     if initial_battery_capacity > env.config["ev"]['desired_capacity'] * battery_capacity:
         #print(f"Initial battery capacity: {initial_battery_capacity} is greater than desired capacity: {env.config['ev']['desired_capacity'] * battery_capacity}")
@@ -504,7 +506,7 @@ def EV_spawner(env) -> List[EV]:
                          minute=0,
                          step=0,
                          min_time_of_stay_steps=85)
-    ev_test.battery_capacity_at_arrival = 10
+    ev_test.battery_capacity_at_arrival = 50
     #print(ev_test.get_soc())
     #return [ev_test]
 

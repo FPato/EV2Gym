@@ -46,6 +46,7 @@ class _MLPAutoencoder(nn.Module):
             encoder_layers.extend([nn.Linear(prev, h), act_layer()])
             prev = h
         encoder_layers.append(nn.Linear(prev, latent_dim))
+        encoder_layers.append(nn.Tanh())  # <--- CRITICAL: Keeps latent values in [-1, 1]
         self.encoder = nn.Sequential(*encoder_layers)
 
         decoder_layers: List[nn.Module] = []
@@ -182,9 +183,12 @@ class AE:
         raise ValueError(f"series must be 1D or 2D, got shape {arr.shape}")
 
     def _fit_scaler(self, x: np.ndarray) -> None:
-        self._mean = x.mean(axis=0)
-        std = x.std(axis=0)
-        self._std = np.where(std < 1e-8, 1.0, std)
+        # Force calculation of the mean/std across the ENTIRE matrix
+        self._mean = np.array(x.mean(), dtype=np.float32) 
+        global_std = x.std()
+        # Ensure std is a single scalar value
+        self._std = np.array(max(global_std, 1e-4), dtype=np.float32)
+        
 
     def _normalize(self, x: np.ndarray) -> np.ndarray:
         if self._mean is None or self._std is None:
@@ -218,6 +222,12 @@ class AE:
         perm = np.random.permutation(n)
         x_norm = x_norm[perm]
         n_val = int(n * val_split)
+        # Avoid empty validation split on very small datasets (e.g. only 2 windows).
+        if val_split > 0.0 and n > 1 and n_val == 0:
+            n_val = 1
+        # Keep at least one training sample.
+        if n_val >= n:
+            n_val = n - 1
         x_val = x_norm[:n_val] if n_val > 0 else None
         x_train = x_norm[n_val:]
 
@@ -264,6 +274,7 @@ class AE:
                 n_train += batch_x.size(0)
 
             train_loss = train_loss / max(1, n_train)
+            
             history["train_loss"].append(train_loss)
 
             if val_tensor is not None:

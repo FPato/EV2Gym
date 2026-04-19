@@ -128,13 +128,19 @@ def V2G_profit_max_loads(env, *args):
     
     if len(charge_prices) < 96:
         charge_prices = np.append(charge_prices, np.zeros(96-len(charge_prices)))
-
-    print(f"charge_prices: {charge_prices[:10]}")
+    
+    #with open(f"log_N.txt", "a") as f:
+    #        f.write(f"{charge_prices[0]}\n")
 
     
-    prices_encoded = env.prices_ae.encode(charge_prices)[0]
+    #prices_encoded = env.prices_ae.encode(charge_prices)[0]
 
-    state.append(prices_encoded)
+    state.append(charge_prices)
+
+    #if np.isnan(prices_encoded).any() or max(prices_encoded) > 100 or min(prices_encoded) < -100:
+    #    with open(f"log.txt", "a") as f:
+    #        f.write(f'PRICE BAD ============\nstep: {env.current_step}\n============\nprices_encoded: {prices_encoded}\n============\n')
+        
     
 
     # For every transformer
@@ -162,13 +168,20 @@ def V2G_profit_max_loads(env, *args):
         #    print(f'difference: {forecated_load_sum/len(loads) - actual_load_sum/len(loads)}')
 
 
-        loads_encoded = env.load_ae.encode(loads)[0]
-        
-        pv_encoded = env.pv_ae.encode(pv)[0]
+        #loads_encoded = env.load_ae.encode(loads)[0]
+        #pv_encoded = env.pv_ae.encode(pv)[0]
 
-        state.append(loads_encoded)
-        state.append(pv_encoded)
+        state.append(loads)
+        state.append(pv)
         state.append(power_limits)
+
+        #if np.isnan(loads_encoded).any() or max(loads_encoded) > 100 or min(loads_encoded) < -100:
+        #    with open(f"log.txt", "a") as f:
+        #        f.write(f'LOADS BAD ============\nstep: {env.current_step}\n============\nloads_encoded: {loads_encoded}\n============\n')
+
+        #if np.isnan(pv_encoded).any() or max(pv_encoded) > 100 or min(pv_encoded) < -100:
+        #    with open(f"log.txt", "a") as f:
+        #        f.write(f'PV BAD ============\nstep: {env.current_step}\n============\npv_encoded: {pv_encoded}\n============\n')
         
         # For every charging station connected to the transformer
         for cs in env.charging_stations:
@@ -191,7 +204,7 @@ def V2G_profit_max_loads(env, *args):
 
 
     #print(f'loads: {loads}\nloads_encoded: {env.load_ae.encode(loads)[0]}')
-    state = np.array(np.hstack(state))        
+    state = np.array(np.hstack(state))     
     return state
     
 

@@ -150,6 +150,13 @@ def plot_two_functions():
     plt.legend()
     plt.savefig("my_plots/plot_two_functions.png")
 
+def mean_and_std():
+    data = np.loadtxt("autoencoder/log_N.txt")
+    print(f"Data shape: {data.shape}")
+    print(f"Mean: {np.mean(data)}")
+    print(f"Std: {np.std(data)}")
+    
+
 
 if __name__ == "__main__":
-    plot_two_functions()
+    mean_and_std()

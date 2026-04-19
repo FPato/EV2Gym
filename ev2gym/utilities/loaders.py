@@ -168,7 +168,7 @@ def generate_residential_inflexible_loads(env) -> np.ndarray:
 
     # select the data for the simulation date
     # CHAAANGE HERE
-    data = data[simulation_index:simulation_index+simulation_length + env.horizon] # add 96 to the simulation length to have a prediction buffer of 96 hours
+    data = data[simulation_index:simulation_index+simulation_length] # + env.horizon] # add 96 to the simulation length to have a prediction buffer of 96 hours
 
     #print(f'Data: {data.to_numpy().shape}')
     # drop the date column
@@ -182,6 +182,8 @@ def generate_residential_inflexible_loads(env) -> np.ndarray:
                                              random_state=env.tr_seed).sum(axis=1)
 
 
+    #print("inflexible loads mean: ", new_data.mean())
+    #print("inflexible loads std: ", new_data.std())
     # return the "tr_" columns
     return new_data.to_numpy().T
 
@@ -238,7 +240,7 @@ def generate_pv_generation(env) -> np.ndarray:
     simulation_index = data[data['date'] == simulation_date].index[0]
 
     # select the data for the simulation date
-    data = data[simulation_index:simulation_index+simulation_length + env.horizon] # add 96 to the simulation length to have a prediction buffer of 96 hours
+    data = data[simulation_index:simulation_index+simulation_length] # + env.horizon] # add 96 to the simulation length to have a prediction buffer of 96 hours
 
     # drop the date column
     data = data.drop(columns=['date'])
@@ -275,13 +277,13 @@ def load_transformers(env) -> List[Transformer]:
 
     else:
         inflexible_loads = np.zeros((env.number_of_transformers,
-                                    env.simulation_length + env.horizon))
+                                    env.simulation_length)) # + env.horizon)
 
     if env.config['solar_power']['include']:
         solar_power = generate_pv_generation(env)
     else:
         solar_power = np.zeros((env.number_of_transformers,
-                                env.simulation_length + env.horizon))
+                                env.simulation_length)) # + env.horizon)
 
     if env.charging_network_topology:
         # parse the topology file and create the transformers
@@ -453,11 +455,11 @@ def load_electricity_prices(env) -> Tuple[np.ndarray, np.ndarray]:
     # assume prices are the same for all charging stations
 
     data = env.price_data
-    charge_prices = np.zeros((env.cs, env.simulation_length + env.horizon))
-    discharge_prices = np.zeros((env.cs, env.simulation_length + env.horizon))
+    charge_prices = np.zeros((env.cs, env.simulation_length)) # + env.horizon)
+    discharge_prices = np.zeros((env.cs, env.simulation_length)) # + env.horizon)
     # for every simulation step, take the price of the corresponding hour
     sim_temp_date = env.sim_date
-    for i in range(env.simulation_length + env.horizon):
+    for i in range(env.simulation_length): # + env.horizon):
 
         year = sim_temp_date.year
         month = sim_temp_date.month
@@ -487,6 +489,7 @@ def load_electricity_prices(env) -> Tuple[np.ndarray, np.ndarray]:
             datetime.timedelta(minutes=env.timescale)
 
     discharge_prices = discharge_prices * env.config['discharge_price_factor']
+
     return charge_prices, discharge_prices
 
 

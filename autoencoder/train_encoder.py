@@ -12,13 +12,16 @@ python3 autoencoder/train_encoder.py \
 from __future__ import annotations
 
 import argparse
+import datetime
 from pathlib import Path
+import sys
 from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import random
+import yaml
 
 from autoencoder import AE
 
@@ -65,6 +68,74 @@ def _extend_series_timescale(series: np.ndarray, desired_timescale: int, dataset
     return series.to_numpy(dtype=np.float32)
 
 
+def _apply_state_like_pv_normalization(
+    signal: np.ndarray,
+    max_power_kw: float = 100.0,
+) -> np.ndarray:
+    """Match Transformer.normalize_pv_generation for AE pv training."""
+    signal = -signal * max_power_kw
+
+    return signal.astype(np.float32)
+
+
+def _load_state_like_charge_price_series(
+    csv_path: str,
+    desired_timescale: int = 15,
+    dataset_timescale: int = 60,
+) -> np.ndarray:
+    path = Path(csv_path)
+    if not path.exists():
+        raise FileNotFoundError(f"CSV not found: {path}")
+
+    data = pd.read_csv(path)
+    if "Price (EUR/MWhe)" not in data.columns:
+        raise ValueError(
+            "Expected 'Price (EUR/MWhe)' column to match state price preprocessing."
+        )
+
+    prices = data["Price (EUR/MWhe)"].to_numpy(dtype=np.float32)
+
+    if desired_timescale < dataset_timescale:
+        if dataset_timescale % desired_timescale != 0:
+            raise ValueError(
+                f"Timescale mismatch: dataset_timescale={dataset_timescale} is not "
+                f"divisible by desired_timescale={desired_timescale}."
+            )
+        repeat_factor = dataset_timescale // desired_timescale
+        prices = np.repeat(prices, repeat_factor)
+    elif desired_timescale > dataset_timescale:
+        if desired_timescale % dataset_timescale != 0:
+            raise ValueError(
+                f"Timescale mismatch: desired_timescale={desired_timescale} is not "
+                f"divisible by dataset_timescale={dataset_timescale}."
+            )
+        step = desired_timescale // dataset_timescale
+        prices = prices[::step]
+
+    # Match `load_electricity_prices`: charge price is negated and converted to EUR/kWh.
+    return (-prices / 1000.0).astype(np.float32)
+
+
+def _apply_state_like_inflexible_load_normalization(
+    signal: np.ndarray,
+    max_power_kw: float = 100.0,
+) -> np.ndarray:
+    """Match Transformer.normalize_inflexible_loads for AE load training."""
+
+    # scale up the data to match the max_power of the transformers
+    signal = signal * (max_power_kw /
+                    signal.max()+0.0000001)
+    # for each step
+    for j in range(len(signal)):
+        if signal[j] > max_power_kw:
+            signal[j] = max_power_kw
+
+        elif signal[j] < -max_power_kw:
+            signal[j] = -max_power_kw
+
+    return signal.astype(np.float32)
+
+
 def _load_series(
     csv_path: str,
     column_selector: str = "auto",
@@ -83,8 +154,14 @@ def _load_series(
         n_cols = data.shape[1]
         sample_size = min(10, n_cols)
         rng = np.random.default_rng()
-        sampled_cols = rng.choice(n_cols, size=sample_size, replace=False)
-        return data[:, sampled_cols].sum(axis=1).astype(np.float32)
+
+        result_data = np.array([])
+        for i in range(10):
+            sampled_cols = rng.choice(n_cols, size=sample_size, replace=False)
+            sampled_data = data[:, sampled_cols].sum(axis=1).astype(np.float32)
+            result_data = np.concatenate([result_data, sampled_data])
+        return result_data
+
 
     if selector.isdigit():
         idx = int(selector)
@@ -138,20 +215,33 @@ def _save_training_representation(
     return plot_path
 
 
-def main_pipeline(signal_csv: str, signal_column: str, horizon: int, latent_dim: int, hidden_dims: list[int], activation: str, learning_rate: float, weight_decay: float, epochs: int, batch_size: int, val_split: float, seed: int, device: str, output_model: str, output_plot: str, output_latents: str) -> None:
+def main_pipeline(signal_csv: str, signal_column: str, horizon: int, latent_dim: int, hidden_dims: list[int], activation: str, learning_rate: float, weight_decay: float, epochs: int, batch_size: int, val_split: float, seed: int, device: str, output_model: str, output_plot: str, output_latents: str, data_type: str, env_config_path: str = "") -> None:
     best_val_loss = np.inf
     best_train_loss = np.inf
 
-    for i in range(10):
+    for run_idx in range(1):
         signal = _load_series(
-            signal_csv,
-            column_selector=signal_column,
-        )
+                signal_csv,
+                column_selector=signal_column,
+            )
+        #print("original signal mean: ", signal.mean())
+        #print("original signal std: ", signal.std())
 
-        signal = signal * -100 * np.random.normal(1, 0.1) # ONLY IN SOLAR
-        #signal = signal / 1000  # ONLY IN PRICES
+        if data_type == "prices":
+            signal = _load_state_like_charge_price_series(
+                signal_csv,
+                desired_timescale=15,
+                dataset_timescale=60,
+            )
+        elif data_type == "loads":
+            signal = _apply_state_like_inflexible_load_normalization(signal)
+            #print("normalized signal mean: ", signal.mean())
+            #print("normalized signal std: ", signal.std())
+
+        elif data_type == "solar":
+            signal = _apply_state_like_pv_normalization(signal)
         
-        feature_matrix = AE.build_single_series_matrix(series=signal, horizon=horizon, stride=96)
+        feature_matrix = AE.build_single_series_matrix(series=signal, horizon=horizon, stride=1)
 
         input_dim = feature_matrix.shape[1]
         if latent_dim >= input_dim:
@@ -175,6 +265,10 @@ def main_pipeline(signal_csv: str, signal_column: str, horizon: int, latent_dim:
         out_model.parent.mkdir(parents=True, exist_ok=True)
 
         #print(f"[AE train] feature_matrix shape={feature_matrix.shape}")
+
+        print(f"[TRAIN SNOOP] Matrix max: {feature_matrix.max():.2f}, min: {feature_matrix.min():.2f}, mean: {feature_matrix.mean():.2f}")
+
+
         history = ae.fit(
             x=feature_matrix,
             epochs=epochs,
@@ -237,14 +331,16 @@ def train_for_solar(latent_dim: int):
         activation="relu", 
         learning_rate=1e-3, 
         weight_decay=0.0, 
-        epochs=500, 
+        epochs=100, 
         batch_size=64, 
         val_split=0.1, 
         seed=random.randint(0, 1000000), #42, 
         device=None, 
         output_model=f"autoencoder/models/N_solar_ae_to{latent_dim}dim.pt", 
         output_plot=f"autoencoder/plots/N_solar_ae_to{latent_dim}dim.training_plot.png",
-        output_latents="")
+        output_latents="",
+        data_type="solar",
+        env_config_path="")
 
 
 def train_for_prices(latent_dim: int):
@@ -256,14 +352,16 @@ def train_for_prices(latent_dim: int):
         activation="relu",
         learning_rate=1e-3,
         weight_decay=0.0,
-        epochs=500,
+        epochs=100,
         batch_size=64,
         val_split=0.1,
         seed=random.randint(0, 1000000), #42, 
         device=None, 
         output_model=f"autoencoder/models/N_prices_ae_to{latent_dim}dim.pt", 
         output_plot=f"autoencoder/plots/N_prices_ae_to{latent_dim}dim.training_plot.png",
-        output_latents="")
+        output_latents="",
+        data_type="prices",
+        env_config_path="")
 
 
 def train_for_loads(latent_dim: int):
@@ -275,17 +373,28 @@ def train_for_loads(latent_dim: int):
         activation="relu",
         learning_rate=1e-3,
         weight_decay=0.0,
-        epochs=500,
+        epochs=100,
         batch_size=64,
         val_split=0.1,
         seed=random.randint(0, 1000000), #42, 
         device=None, 
         output_model=f"autoencoder/models/N_loads_ae_to{latent_dim}dim.pt", 
         output_plot=f"autoencoder/plots/N_loads_ae_to{latent_dim}dim.training_plot.png",
-        output_latents="")
+        output_latents="",
+        data_type="loads",
+        env_config_path="ev2gym/example_config_files/V2GProfitPlusLoads.yaml")
 
 if __name__ == "__main__":
+    train_for_loads(latent_dim=2)
+    train_for_loads(latent_dim=4)
+    train_for_loads(latent_dim=8)
+    train_for_loads(latent_dim=16)
+    train_for_prices(latent_dim=2)
+    train_for_prices(latent_dim=4)
+    train_for_prices(latent_dim=8)
+    train_for_prices(latent_dim=16)
     train_for_solar(latent_dim=2)
-    #train_for_prices(latent_dim=16)
-    #train_for_loads(latent_dim=16)
+    train_for_solar(latent_dim=4)
+    train_for_solar(latent_dim=8)
+    train_for_solar(latent_dim=16)
 

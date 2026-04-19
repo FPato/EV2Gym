@@ -102,8 +102,9 @@ class EV2Gym(gym.Env):
 
         
         self.pv_ae = AE.load('autoencoder/models/N_solar_ae_to8dim.pt')
-        self.load_ae = AE.load('autoencoder/models/loads_ae_to8dim.pt')
-        self.prices_ae = AE.load('autoencoder/models/N_prices_ae_to4dim.pt')
+        self.load_ae = AE.load('autoencoder/models/N_loads_ae_to8dim.pt')
+        self.prices_ae = AE.load('autoencoder/models/N_prices_ae_to8dim.pt')
+
 
         self.horizon = 96
 
@@ -269,6 +270,7 @@ class EV2Gym(gym.Env):
         self.info_ev_soc = []
         self.info_actions = []
         self.info_prices = []
+        self.arriving_car_soc = []
 
         
 
@@ -334,6 +336,7 @@ class EV2Gym(gym.Env):
         self.info_reward_profit = 0
         self.info_reward_overload = 0
         self.info_reward_satisfaction = 0
+
 
         self.EVs = []
         init_statistic_variables(self)
@@ -473,6 +476,8 @@ class EV2Gym(gym.Env):
                 self.total_evs_spawned += 1
                 self.current_ev_arrived += 1
                 self.EVs.append(ev)
+                #with open("transformer.txt", "a") as f:
+                #    f.write(f"{ev.get_soc()}\n")
                 #print(f"Step {self.current_step}: EV {ev.id} arrived at charging station {ev.location} with departure time {ev.time_of_departure}")
 
             elif ev.time_of_arrival > self.current_step + 1:

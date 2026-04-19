@@ -46,7 +46,7 @@ if __name__ == "__main__":
                         # default="ev2gym/example_config_files/V2GProfitMax.yaml")
                         default="ev2gym/example_config_files/V2GProfitPlusLoads.yaml")
     args = parser.parse_args()
-    seeds = [random.randint(1, 1000000), random.randint(1, 1000000), random.randint(1, 1000000)] #[658710]
+    seeds = [865413, 619614, 712708, 42] #[random.randint(1, 1000000), random.randint(1, 1000000), random.randint(1, 1000000)]
     for seed in seeds:
         algorithm = args.algorithm
         device = args.device
@@ -70,7 +70,7 @@ if __name__ == "__main__":
             state_function = V2G_profit_max_loads
             group_name = f'{config["number_of_charging_stations"]}cs_V2GProfitPlusLoads'
 
-        run_name += f'SETSEED_{seed}_{algorithm}_{reward_function.__name__}_{state_function.__name__}_v45_all_encoded_fixed'
+        run_name += f'SETSEED_{seed}_{algorithm}_{reward_function.__name__}_{state_function.__name__}_v40_AGAIN_no_encoding_no_horizon_end_fix_no_ev_soc_dist_fix'
 
         run = wandb.init(project='ev2gym-base',
                         sync_tensorboard=True,
@@ -78,6 +78,7 @@ if __name__ == "__main__":
                         name=run_name,
                         save_code=True,
                         config={"seed": seed},
+                        settings=wandb.Settings(init_timeout=300)
                         )
 
         gym.envs.register(id='evs-v0', entry_point='ev2gym.models.ev2gym_env:EV2Gym',
@@ -133,7 +134,7 @@ if __name__ == "__main__":
                         device=device, tensorboard_log="./logs/")
         elif algorithm == "sac":
             model = SAC("MlpPolicy", train_env, verbose=1,
-                        seed=seed, #policy_kwargs = dict(net_arch=[256, 128, 64, 32]),
+                        seed=seed, #policy_kwargs = dict(net_arch=[128, 64, 32]),
                         # Start at 0.5 (very high exploration), then let it tune
                         #ent_coef="auto_0.5", 
                         # Aim for a much higher target than the default -1.0
@@ -175,6 +176,7 @@ if __name__ == "__main__":
                         WandbCallback(
                             verbose=2),
                         eval_callback])
+
         # model.save(f"./saved_models/{group_name}/{run_name}.last")
         print(f'Finished training {algorithm} algorithm, {run_name} saving model at {save_path}_last.pt')
 
@@ -201,6 +203,8 @@ if __name__ == "__main__":
             if done:
                 stats.append(info)
                 obs = env.reset()
+
+        # 100x = 0.6619781476866506
 
         # print average stats
         print("=====================================================")

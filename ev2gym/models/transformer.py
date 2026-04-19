@@ -35,19 +35,19 @@ class Transformer():
         """
 
         if inflexible_load is None:
-            inflexible_load = np.zeros(simulation_length + env.horizon)
+            inflexible_load = np.zeros(simulation_length) # + env.horizon)
         if solar_power is None:
-            solar_power = np.zeros(simulation_length + env.horizon)
+            solar_power = np.zeros(simulation_length) # + env.horizon)
 
         self.id = id
         self.voltage = env.config['charging_station']['voltage'] * \
             math.sqrt(env.config['charging_station']['phases'])
         max_current = max_power * 1000 / self.voltage
 
-        self.max_current = np.ones(simulation_length + env.horizon)*max_current
-        self.min_current = np.ones(simulation_length + env.horizon) * -max_current
-        self.max_power = np.ones(simulation_length + env.horizon)*max_power
-        self.min_power = np.ones(simulation_length + env.horizon) * -max_power
+        self.max_current = np.ones(simulation_length)*max_current  # + env.horizon)
+        self.min_current = np.ones(simulation_length) * -max_current # + env.horizon)
+        self.max_power = np.ones(simulation_length)*max_power # + env.horizon)
+        self.min_power = np.ones(simulation_length) * -max_power # + env.horizon)
 
         self.inflexible_load = inflexible_load
         self.solar_power = solar_power
@@ -60,12 +60,12 @@ class Transformer():
 
         self.current_step = 0
 
-        self.inflexible_load_forecast = np.zeros(env.simulation_length + env.horizon)
+        self.inflexible_load_forecast = np.zeros(env.simulation_length) # + env.horizon)
         if env.config['inflexible_loads']['include']:
             self.normalize_inflexible_loads(env)
             self.generate_inflexible_loads_forecast(env)
 
-        self.pv_generation_forecast = np.zeros(env.simulation_length + env.horizon)
+        self.pv_generation_forecast = np.zeros(env.simulation_length) # + env.horizon)
         if env.config['solar_power']['include']:
             self.normalize_pv_generation(env)
             self.generate_pv_generation_forecast(env)
@@ -80,6 +80,7 @@ class Transformer():
                                                     self.max_power)
         else:
             self.dr_events = []
+
 
     def generate_demand_response_events(self, env) -> None:
         '''
@@ -195,14 +196,11 @@ class Transformer():
         '''
         Normalize the solar_power using the configuration file and teh max_power of the transformer
         '''
-        #print(f'Solar power: {self.solar_power[40]}')
         if env.config['solar_power']['include']:
             mult = env.config['solar_power']['solar_power_capacity_multiplier_mean']
             mult = env.tr_rng.normal(mult, 0.1)
             self.solar_power = -self.solar_power * \
                 mult * max(self.max_power)
-        #print(f'Solar power: {self.solar_power[40]}')
-        #print('--------------------------------')
 
     def generate_pv_generation_forecast(self, env) -> None:
         '''
@@ -241,7 +239,7 @@ class Transformer():
 
                 elif self.inflexible_load[j] < self.min_power[j]:
                     self.inflexible_load[j] = self.min_power[j]
-
+        
         #self.generate_inflexible_loads_forecast(env)
 
     def generate_inflexible_loads_forecast(self, env) -> None:
