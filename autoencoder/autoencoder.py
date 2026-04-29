@@ -380,5 +380,5 @@ class AE:
         model._mean = np.asarray(payload["mean"], dtype=np.float32)
         model._std = np.asarray(payload["std"], dtype=np.float32)
         model._is_fitted = True
-        model.model.eval()
+        #model.model.eval()
         return model

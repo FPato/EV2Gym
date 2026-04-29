@@ -227,8 +227,8 @@ class EV_Charger:
                 raise Exception(
                     f'sum of amps {self.current_total_amps} is higher than max charge current {self.max_charge_current}')
 
-        #if env is not None:
-        #    env.info_how_much_charge.append(actual_energy)
+        if env is not None:
+            env.info_how_much_charge.append(actual_energy)
 
         self.total_profits += profit
 

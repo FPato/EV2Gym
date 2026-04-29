@@ -5,7 +5,8 @@ from sb3_contrib import TQC, TRPO, ARS, RecurrentPPO
 
 from ev2gym.models.ev2gym_env import EV2Gym
 from ev2gym.rl_agent.reward import SquaredTrackingErrorReward, ProfitMax_TrPenalty_UserIncentives, \
-                            V2G_profitmaxV2, ProfitMax_averaged, ProfitMax_TrPenalty_UserIncentives_2
+                            V2G_profitmaxV2, ProfitMax_averaged, ProfitMax_TrPenalty_UserIncentives_2, \
+                            ProfitMax_SatisfactionFirst
 from ev2gym.rl_agent.reward import profit_maximization
 
 from ev2gym.rl_agent.state import V2G_profit_max, PublicPST, V2G_profit_max_loads
@@ -56,8 +57,8 @@ if __name__ == "__main__":
     #print(f"SAC critic qf0: {model.policy.critic.qf0}")
     #print(f"SAC critic qf1: {model.policy.critic.qf1}")
 
-
-    save_path = "saved_models/1cs_V2GProfitPlusLoads/DEBUG-SETSEED_865413_sac_ProfitMax_TrPenalty_UserIncentives_2_V2G_profit_max_loads_v49_fix_all_ae_dist"
+    #[865413, 619614, 712708, 91735, 154548]
+    save_path = "saved_models/1cs_V2GProfitPlusLoads/SETSEED_712708_sac_ProfitMax_TrPenalty_UserIncentives_2_V2G_profit_max_loads_v57_open_ae"
 
     #print(f"PATH: {save_path}/best_model.zip")
     model = model.load(f"{save_path}/best_model", env=env)
@@ -112,7 +113,7 @@ if __name__ == "__main__":
 
     plt.legend()
     plt.subplots_adjust(bottom=0.2)
-    plt.savefig("my_plots/plot_charge_v49_setseed_865413_CHAOTIC.png")
+    plt.savefig("my_plots/plot_charge_v57_setseed_712708_OPTIMAL.png")
 
     # print average stats
     print("=====================================================")

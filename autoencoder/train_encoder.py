@@ -156,7 +156,7 @@ def _load_series(
         rng = np.random.default_rng()
 
         result_data = np.array([])
-        for i in range(10):
+        for i in range(5):
             sampled_cols = rng.choice(n_cols, size=sample_size, replace=False)
             sampled_data = data[:, sampled_cols].sum(axis=1).astype(np.float32)
             result_data = np.concatenate([result_data, sampled_data])
@@ -266,7 +266,7 @@ def main_pipeline(signal_csv: str, signal_column: str, horizon: int, latent_dim:
 
         #print(f"[AE train] feature_matrix shape={feature_matrix.shape}")
 
-        print(f"[TRAIN SNOOP] Matrix max: {feature_matrix.max():.2f}, min: {feature_matrix.min():.2f}, mean: {feature_matrix.mean():.2f}")
+        #print(f"[TRAIN SNOOP] Matrix max: {feature_matrix.max():.2f}, min: {feature_matrix.min():.2f}, mean: {feature_matrix.mean():.2f}")
 
 
         history = ae.fit(
@@ -336,8 +336,8 @@ def train_for_solar(latent_dim: int):
         val_split=0.1, 
         seed=random.randint(0, 1000000), #42, 
         device=None, 
-        output_model=f"autoencoder/models/N_solar_ae_to{latent_dim}dim.pt", 
-        output_plot=f"autoencoder/plots/N_solar_ae_to{latent_dim}dim.training_plot.png",
+        output_model=f"autoencoder/models/OPEN_solar_ae_to{latent_dim}dim.pt", 
+        output_plot=f"autoencoder/plots/OPEN_solar_ae_to{latent_dim}dim_training_plot.png",
         output_latents="",
         data_type="solar",
         env_config_path="")
@@ -357,8 +357,8 @@ def train_for_prices(latent_dim: int):
         val_split=0.1,
         seed=random.randint(0, 1000000), #42, 
         device=None, 
-        output_model=f"autoencoder/models/N_prices_ae_to{latent_dim}dim.pt", 
-        output_plot=f"autoencoder/plots/N_prices_ae_to{latent_dim}dim.training_plot.png",
+        output_model=f"autoencoder/models/OPEN_prices_ae_to{latent_dim}dim.pt", 
+        output_plot=f"autoencoder/plots/OPEN_prices_ae_to{latent_dim}dim_training_plot.png",
         output_latents="",
         data_type="prices",
         env_config_path="")
@@ -378,23 +378,15 @@ def train_for_loads(latent_dim: int):
         val_split=0.1,
         seed=random.randint(0, 1000000), #42, 
         device=None, 
-        output_model=f"autoencoder/models/N_loads_ae_to{latent_dim}dim.pt", 
-        output_plot=f"autoencoder/plots/N_loads_ae_to{latent_dim}dim.training_plot.png",
+        output_model=f"autoencoder/models/OPEN_loads_ae_to{latent_dim}dim.pt", 
+        output_plot=f"autoencoder/plots/OPEN_loads_ae_to{latent_dim}dim_training_plot.png",
         output_latents="",
         data_type="loads",
         env_config_path="ev2gym/example_config_files/V2GProfitPlusLoads.yaml")
 
 if __name__ == "__main__":
-    train_for_loads(latent_dim=2)
-    train_for_loads(latent_dim=4)
-    train_for_loads(latent_dim=8)
-    train_for_loads(latent_dim=16)
-    train_for_prices(latent_dim=2)
-    train_for_prices(latent_dim=4)
-    train_for_prices(latent_dim=8)
-    train_for_prices(latent_dim=16)
-    train_for_solar(latent_dim=2)
-    train_for_solar(latent_dim=4)
-    train_for_solar(latent_dim=8)
-    train_for_solar(latent_dim=16)
+
+    train_for_loads(latent_dim=32)
+    train_for_prices(latent_dim=32)
+    train_for_solar(latent_dim=32)
 

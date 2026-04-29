@@ -6,7 +6,7 @@ from stable_baselines3.common.callbacks import EvalCallback
 from sb3_contrib import TQC, TRPO, ARS, RecurrentPPO
 
 from ev2gym.models.ev2gym_env import EV2Gym
-from ev2gym.rl_agent.reward import SquaredTrackingErrorReward, ProfitMax_TrPenalty_UserIncentives, ProfitMax_TrPenalty_UserIncentives_2
+from ev2gym.rl_agent.reward import SquaredTrackingErrorReward, ProfitMax_TrPenalty_UserIncentives, ProfitMax_TrPenalty_UserIncentives_2, ProfitMax_SatisfactionFirst
 from ev2gym.rl_agent.reward import profit_maximization
 
 from ev2gym.rl_agent.state import V2G_profit_max, PublicPST, V2G_profit_max_loads
@@ -20,6 +20,74 @@ import yaml
 import random
 import numpy as np
 import torch
+
+import torch.nn as nn
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+
+from autoencoder.autoencoder import AE
+
+class TripleEncoderExtractor(BaseFeaturesExtractor):
+    def __init__(self, observation_space, solar_path, price_path, load_path, latent_dim=8):
+        # Output: Raw Variables + 3 * Latent Vectors
+        self.raw_size = 103 
+        self.forecast_size = 96
+        
+        super().__init__(observation_space, features_dim=self.raw_size + (latent_dim * 3))
+
+        # Keep full AE objects so we can persist fine-tuned weights later.
+        self.solar_ae = AE.load(solar_path)
+        self.price_ae = AE.load(price_path)
+        self.load_ae = AE.load(load_path)
+
+        # Load and register buffers for all three
+        self.solar_enc, self.s_m, self.s_s = self._prep_enc(self.solar_ae)
+        self.price_enc, self.p_m, self.p_s = self._prep_enc(self.price_ae)
+        self.load_enc,  self.l_m, self.l_s = self._prep_enc(self.load_ae)
+
+    def _prep_enc(self, ae_model):
+        encoder = ae_model.model.encoder
+        # Unfreeze
+        for param in encoder.parameters():
+            param.requires_grad = True
+        return encoder, torch.tensor(ae_model._mean), torch.tensor(ae_model._std)
+
+    def forward(self, observations):
+        raw_data = observations[:, :2]
+        price_f  = observations[:, 2:98]
+        load_f  = observations[:, 98:194]
+        solar_f   = observations[:, 194:290]
+        power_limits = observations[:, 290:386]
+        ev_states = observations[:, 386:]
+        # 1. Process Raw (SoC, current price, etc.)
+        features = [raw_data]
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # 3. Process Prices
+        p_norm = (price_f - self.p_m.to(self.device)) / (self.p_s.to(self.device) + 1e-4)
+        features.append(price_f[:, :1])
+        features.append(self.price_enc(p_norm))
+
+        # 4. Process Loads
+        l_norm = (load_f - self.l_m.to(self.device)) / (self.l_s.to(self.device) + 1e-4)
+        features.append(load_f[:, :1])
+        features.append(self.load_enc(l_norm))
+
+        # 2. Process Solar
+        s_norm = (solar_f - self.s_m.to(self.device)) / (self.s_s.to(self.device) + 1e-4)
+        features.append(solar_f[:, :1])
+        features.append(self.solar_enc(s_norm))
+
+        features.append(power_limits)
+        features.append(ev_states)
+
+        return torch.cat(features, dim=-1)
+
+    def save_finetuned_aes(self, output_dir: str) -> None:
+        os.makedirs(output_dir, exist_ok=True)
+        self.solar_ae.save(os.path.join(output_dir, "TRAINED_solar_ae.pt"))
+        self.price_ae.save(os.path.join(output_dir, "TRAINED_prices_ae.pt"))
+        self.load_ae.save(os.path.join(output_dir, "TRAINED_loads_ae.pt"))
 
 
 def set_global_seeds(seed: int) -> None:
@@ -46,7 +114,8 @@ if __name__ == "__main__":
                         # default="ev2gym/example_config_files/V2GProfitMax.yaml")
                         default="ev2gym/example_config_files/V2GProfitPlusLoads.yaml")
     args = parser.parse_args()
-    seeds = [865413, 619614, 712708, 42] #[random.randint(1, 1000000), random.randint(1, 1000000), random.randint(1, 1000000)]
+    # [865413, 619614, 712708, 91735, 154548]
+    seeds = [865413, 619614, 712708, 91735, 154548] #[random.randint(1, 1000000), random.randint(1, 1000000), random.randint(1, 1000000)]
     for seed in seeds:
         algorithm = args.algorithm
         device = args.device
@@ -70,7 +139,7 @@ if __name__ == "__main__":
             state_function = V2G_profit_max_loads
             group_name = f'{config["number_of_charging_stations"]}cs_V2GProfitPlusLoads'
 
-        run_name += f'SETSEED_{seed}_{algorithm}_{reward_function.__name__}_{state_function.__name__}_v40_AGAIN_no_encoding_no_horizon_end_fix_no_ev_soc_dist_fix'
+        run_name += f'SETSEED_{seed}_{algorithm}_{reward_function.__name__}_{state_function.__name__}_v57_open_ae'
 
         run = wandb.init(project='ev2gym-base',
                         sync_tensorboard=True,
@@ -133,12 +202,18 @@ if __name__ == "__main__":
                         seed=seed,
                         device=device, tensorboard_log="./logs/")
         elif algorithm == "sac":
+            policy_kwargs = dict(
+                features_extractor_class=TripleEncoderExtractor,
+                features_extractor_kwargs=dict(
+                    solar_path="autoencoder/models/OPEN_solar_ae_to16dim.pt",
+                    price_path="autoencoder/models/OPEN_prices_ae_to16dim.pt",
+                    load_path="autoencoder/models/OPEN_loads_ae_to16dim.pt",
+                    latent_dim=16
+                ),
+                net_arch=dict(pi=[128, 128, 64], qf=[128, 128, 64])
+            )
             model = SAC("MlpPolicy", train_env, verbose=1,
-                        seed=seed, #policy_kwargs = dict(net_arch=[128, 64, 32]),
-                        # Start at 0.5 (very high exploration), then let it tune
-                        #ent_coef="auto_0.5", 
-                        # Aim for a much higher target than the default -1.0
-                        #target_entropy=-0.1,
+                        seed=seed, policy_kwargs = policy_kwargs,
                         device=device, tensorboard_log="./logs/")
         elif algorithm == "a2c":
             model = A2C("MlpPolicy", train_env, verbose=1,
@@ -176,6 +251,13 @@ if __name__ == "__main__":
                         WandbCallback(
                             verbose=2),
                         eval_callback])
+
+        # Save fine-tuned AEs when using an extractor that supports it.
+        feature_extractor = getattr(model.policy.actor, "features_extractor", None)
+        if feature_extractor is not None and hasattr(feature_extractor, "save_finetuned_aes"):
+            ae_save_dir = "autoencoder/models"
+            feature_extractor.save_finetuned_aes(ae_save_dir)
+            print(f"Saved fine-tuned AEs to: {ae_save_dir}")
 
         # model.save(f"./saved_models/{group_name}/{run_name}.last")
         print(f'Finished training {algorithm} algorithm, {run_name} saving model at {save_path}_last.pt')

@@ -58,14 +58,55 @@ def ProfitMax_TrPenalty_UserIncentives_2(env, total_costs, user_satisfaction_lis
     
     satisfaction_reward = 0
     for score in user_satisfaction_list:
-        #reward -= 10 * (1 - score)
-        satisfaction_reward -= 100 * math.exp(-8*score)
+        satisfaction_reward -= 100 * (1 - score)
+        #satisfaction_reward -= 100 * math.exp(-8*score)
 
     #env.info_reward_profit += total_costs
     #env.info_reward_overload += overload_reward
     #env.info_reward_satisfaction += satisfaction_reward
         
     return reward + overload_reward + satisfaction_reward - invalid_action_punishment * 10
+
+def ProfitMax_SatisfactionFirst(env, total_costs, user_satisfaction_list, invalid_action_punishment, *args):
+    """
+    Reward shaping that puts user satisfaction first while still considering grid/economic terms.
+
+    The signal combines:
+      - mild profit term
+      - strong penalty for transformer overload
+      - strong non-linear penalties for low satisfaction at departure
+      - urgency penalty for connected EVs that are unlikely to reach desired SoC in time
+      - penalty for invalid actions
+    """
+    reward = 0.15 * total_costs
+
+    for tr in env.transformers:
+        reward -= 120 * tr.get_how_overloaded()
+
+    for score in user_satisfaction_list:
+        deficit = max(1 - score, 0)
+        reward -= 240 * deficit
+        reward -= 360 * (deficit ** 2)
+
+    for cs in env.charging_stations:
+        for ev in cs.evs_connected:
+            if ev is None:
+                continue
+
+            desired_gap = max(ev.desired_capacity - ev.current_capacity, 0)
+            if desired_gap <= 0:
+                continue
+
+            remaining_steps = max(ev.time_of_departure - env.current_step, 0)
+            max_energy_per_step = ev.max_ac_charge_power / (60 / env.timescale)
+            max_possible_fill = remaining_steps * max_energy_per_step
+
+            if desired_gap > max_possible_fill:
+                unreachable_gap = desired_gap - max_possible_fill
+                reward -= 45 * unreachable_gap
+
+    reward -= invalid_action_punishment * 20
+    return reward
 
 def ProfitMax_Balanced(env, total_profit, user_satisfaction_list, total_invalid_action_punishment, us_non_depart, *args):
     # 1. Start with profit (The base goal)

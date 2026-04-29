@@ -101,9 +101,9 @@ class EV2Gym(gym.Env):
         self.tr_rng = np.random.default_rng(seed=self.tr_seed)
 
         
-        self.pv_ae = AE.load('autoencoder/models/N_solar_ae_to8dim.pt')
-        self.load_ae = AE.load('autoencoder/models/N_loads_ae_to8dim.pt')
-        self.prices_ae = AE.load('autoencoder/models/N_prices_ae_to8dim.pt')
+        self.pv_ae = AE.load('autoencoder/models/OPEN_solar_ae_to16dim.pt')
+        self.load_ae = AE.load('autoencoder/models/OPEN_loads_ae_to16dim.pt') # was 4dim
+        self.prices_ae = AE.load('autoencoder/models/OPEN_prices_ae_to16dim.pt')
 
 
         self.horizon = 96
@@ -389,14 +389,14 @@ class EV2Gym(gym.Env):
         #print(f'pv ratio: {self.current_pv_ratio}')
 
 
-        #self.info_current_time.append(self.sim_date.strftime("%H:%M"))
-        #self.info_pv_output.append(self.local_pv * (self.current_pv_ratio/100))
-        #if self.charging_stations[0].evs_connected[0] is not None:
-        #    self.info_ev_soc.append(self.charging_stations[0].evs_connected[0].get_soc()*10)
-        #else:
-        #    self.info_ev_soc.append(0)
-        #self.info_actions.append(actions[0])
-        #self.info_prices.append(self.charge_prices[0,self.current_step]*-10)
+        self.info_current_time.append(self.sim_date.strftime("%H:%M"))
+        self.info_pv_output.append(self.local_pv * (self.current_pv_ratio/100))
+        if self.charging_stations[0].evs_connected[0] is not None:
+            self.info_ev_soc.append(self.charging_stations[0].evs_connected[0].get_soc()*10)
+        else:
+            self.info_ev_soc.append(0)
+        self.info_actions.append(actions[0])
+        self.info_prices.append(self.charge_prices[0,self.current_step]*-10)
 
 
         if self.verbose:

@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import math
+import torch
 
 def create_pv_file():
     # 1. Define your file names
@@ -155,8 +156,33 @@ def mean_and_std():
     print(f"Data shape: {data.shape}")
     print(f"Mean: {np.mean(data)}")
     print(f"Std: {np.std(data)}")
-    
+
+def check_ae_differnce():
+    path_1 = "autoencoder/models/OPEN_solar_ae_to16dim.pt"
+    path_2 = "autoencoder/models/TRAINED_solar_ae.pt"
+
+    def load_state_dict(path):
+        checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+        if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+            return checkpoint["state_dict"]
+        if isinstance(checkpoint, dict):
+            return checkpoint
+        raise ValueError(f"Unsupported checkpoint format in {path}")
+
+    state_dict_1 = load_state_dict(path_1)
+    state_dict_2 = load_state_dict(path_2)
+
+    if set(state_dict_1.keys()) != set(state_dict_2.keys()):
+        return True
+
+    for key in state_dict_1:
+        w1 = state_dict_1[key].detach().cpu()
+        w2 = state_dict_2[key].detach().cpu()
+        if w1.shape != w2.shape or not torch.equal(w1, w2):
+            return True
+
+    return False
 
 
 if __name__ == "__main__":
-    mean_and_std()
+    print(check_ae_differnce())
