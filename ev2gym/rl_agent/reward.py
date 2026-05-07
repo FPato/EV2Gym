@@ -58,8 +58,8 @@ def ProfitMax_TrPenalty_UserIncentives_2(env, total_costs, user_satisfaction_lis
     
     satisfaction_reward = 0
     for score in user_satisfaction_list:
-        satisfaction_reward -= 100 * (1 - score)
-        #satisfaction_reward -= 100 * math.exp(-8*score)
+        #satisfaction_reward -= 100 * (1 - score)
+        satisfaction_reward -= 100 * math.exp(-8*score)
 
     #env.info_reward_profit += total_costs
     #env.info_reward_overload += overload_reward

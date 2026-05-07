@@ -18,7 +18,7 @@ from ev2gym.models.grid import PowerGrid
 
 from ev2gym.utilities.utils import EV_spawner, generate_power_setpoints, EV_spawner_GF
 
-scenario = "optimal"  # early, train, optimal, chaotic, insufficient
+scenario = "train"  # early, train, optimal, chaotic, insufficient
 scenario_path= ''
 if scenario == "optimal":
     scenario_path = "data/optimal_pv_scenario/"

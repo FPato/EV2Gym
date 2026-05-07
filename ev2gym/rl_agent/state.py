@@ -136,8 +136,8 @@ def V2G_profit_max_loads(env, *args):
     
     prices_encoded = env.prices_ae.encode(charge_prices)[0]
 
-    state.append(charge_prices)
-    #state.append(prices_encoded)
+    state.append(charge_prices[0])
+    state.append(prices_encoded)
 
     #if np.isnan(prices_encoded).any() or max(prices_encoded) > 100 or min(prices_encoded) < -100:
     #    with open(f"log.txt", "a") as f:
@@ -173,10 +173,10 @@ def V2G_profit_max_loads(env, *args):
         loads_encoded = env.load_ae.encode(loads)[0]
         pv_encoded = env.pv_ae.encode(pv)[0]
 
-        state.append(loads)
-        #state.append(loads_encoded)
-        state.append(pv)
-        #state.append(pv_encoded)
+        state.append(loads[0])
+        state.append(loads_encoded)
+        state.append(pv[0])
+        state.append(pv_encoded)
         state.append(power_limits)
 
         #if np.isnan(loads_encoded).any() or max(loads_encoded) > 100 or min(loads_encoded) < -100:

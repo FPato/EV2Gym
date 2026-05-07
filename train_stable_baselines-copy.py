@@ -115,7 +115,7 @@ if __name__ == "__main__":
                         default="ev2gym/example_config_files/V2GProfitPlusLoads.yaml")
     args = parser.parse_args()
     # [865413, 619614, 712708, 91735, 154548]
-    seeds = [865413, 619614, 712708, 91735, 154548] #[random.randint(1, 1000000), random.randint(1, 1000000), random.randint(1, 1000000)]
+    seeds = [random.randint(1, 1000000)]
     for seed in seeds:
         algorithm = args.algorithm
         device = args.device
@@ -139,7 +139,7 @@ if __name__ == "__main__":
             state_function = V2G_profit_max_loads
             group_name = f'{config["number_of_charging_stations"]}cs_V2GProfitPlusLoads'
 
-        run_name += f'SETSEED_{seed}_{algorithm}_{reward_function.__name__}_{state_function.__name__}_v57_open_ae'
+        run_name += f'SETSEED_{seed}_{algorithm}_{reward_function.__name__}_{state_function.__name__}_v61_frozen_ae_16'
 
         run = wandb.init(project='ev2gym-base',
                         sync_tensorboard=True,
@@ -203,13 +203,13 @@ if __name__ == "__main__":
                         device=device, tensorboard_log="./logs/")
         elif algorithm == "sac":
             policy_kwargs = dict(
-                features_extractor_class=TripleEncoderExtractor,
-                features_extractor_kwargs=dict(
-                    solar_path="autoencoder/models/OPEN_solar_ae_to16dim.pt",
-                    price_path="autoencoder/models/OPEN_prices_ae_to16dim.pt",
-                    load_path="autoencoder/models/OPEN_loads_ae_to16dim.pt",
-                    latent_dim=16
-                ),
+                #features_extractor_class=TripleEncoderExtractor,
+                #features_extractor_kwargs=dict(
+                #    solar_path="autoencoder/models/OPEN_solar_ae_to16dim.pt",
+                #    price_path="autoencoder/models/OPEN_prices_ae_to16dim.pt",
+                #    load_path="autoencoder/models/OPEN_loads_ae_to16dim.pt",
+                #    latent_dim=16
+                #),
                 net_arch=dict(pi=[128, 128, 64], qf=[128, 128, 64])
             )
             model = SAC("MlpPolicy", train_env, verbose=1,

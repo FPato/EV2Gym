@@ -308,8 +308,9 @@ class Transformer():
         Returns:
             - a amps value if the transformer is overloaded
         '''
-        #with open('transformer.log', 'a') as f:
-        #    f.write(f'Max power: {self.max_power[self.current_step]}, Min power: {self.min_power[self.current_step]}\nCurrent power: {self.current_power}, Inflexible load: {self.inflexible_load[self.current_step]}, Solar power: {self.solar_power[self.current_step]}\nOverloaded by: {np.abs(self.current_power - self.max_power[self.current_step])} {self.is_overloaded()}\n\n')
+        if self.is_overloaded():
+            with open('transformer.log', 'a') as f:
+                f.write(f'Max power: {self.max_power[self.current_step]}, Min power: {self.min_power[self.current_step]}\nCurrent power: {self.current_power}, Inflexible load: {self.inflexible_load[self.current_step]}, Solar power: {self.solar_power[self.current_step]}\nOverloaded by: {np.abs(self.current_power - self.max_power[self.current_step])}\n\n')
         if self.is_overloaded():
             return np.abs(self.current_power) - self.max_power[self.current_step]
         else:

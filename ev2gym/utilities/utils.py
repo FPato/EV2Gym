@@ -508,7 +508,7 @@ def EV_spawner(env) -> List[EV]:
                          min_time_of_stay_steps=85)
     ev_test.battery_capacity_at_arrival = 10
     #print(ev_test.get_soc())
-    return [ev_test]
+    #return [ev_test]
 
     ev_list = []
 
