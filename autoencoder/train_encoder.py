@@ -1,14 +1,3 @@
-"""Simple single-series autoencoder training pipeline.
-
-Train one model per signal type (solar OR prices OR loads), e.g.:
-
-python3 autoencoder/train_encoder.py \
-  --signal-csv ev2gym/data/early_pv_scenario/test-pv.csv \
-  --horizon 96 \
-  --latent-dim 16 \
-  --output-model autoencoder/models/solar_ae.pt
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -72,7 +61,6 @@ def _apply_state_like_pv_normalization(
     signal: np.ndarray,
     max_power_kw: float = 100.0,
 ) -> np.ndarray:
-    """Match Transformer.normalize_pv_generation for AE pv training."""
     signal = -signal * max_power_kw
 
     return signal.astype(np.float32)
@@ -120,7 +108,6 @@ def _apply_state_like_inflexible_load_normalization(
     signal: np.ndarray,
     max_power_kw: float = 100.0,
 ) -> np.ndarray:
-    """Match Transformer.normalize_inflexible_loads for AE load training."""
 
     # scale up the data to match the max_power of the transformers
     signal = signal * (max_power_kw /
@@ -274,7 +261,6 @@ def main_pipeline(signal_csv: str, signal_column: str, horizon: int, latent_dim:
             epochs=epochs,
             batch_size=batch_size,
             val_split=val_split,
-            verbose=False,
             best_checkpoint_path=out_model,
         )
 

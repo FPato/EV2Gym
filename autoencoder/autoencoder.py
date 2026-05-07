@@ -1,11 +1,3 @@
-
-"""Autoencoder utilities for forecast time-series compression.
-
-This module provides a small PyTorch autoencoder that compresses forecast
-windows (PV generation, inflexible loads, and optional extra signals) into a
-latent vector that can be used as part of RL state generation.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -21,8 +13,6 @@ ArrayLike = Union[np.ndarray, Sequence[float]]
 
 
 class _MLPAutoencoder(nn.Module):
-    """Simple fully-connected autoencoder."""
-
     def __init__(
         self,
         input_dim: int,
@@ -78,8 +68,6 @@ class _MLPAutoencoder(nn.Module):
 
 @dataclass
 class AEConfig:
-    """Configuration used to build and train an autoencoder."""
-
     input_dim: int
     latent_dim: int = 16
     hidden_dims: Tuple[int, ...] = (128, 64)
@@ -93,15 +81,6 @@ class AEConfig:
 
 
 class AE:
-    """Forecast autoencoder wrapper used by state generation.
-
-    Typical usage:
-    1) Train once on historical/forecast windows:
-       `ae.fit_from_forecasts(pv, inflexible_load, other_series=...)`
-    2) At each environment step, compress a horizon window:
-       `latent = ae.encode_state_features(pv_h, load_h, other_h)`
-    """
-
     def __init__(
         self,
         input_dim: int,
@@ -201,11 +180,9 @@ class AE:
         epochs: int = 200,
         batch_size: int = 64,
         val_split: float = 0.1,
-        verbose: bool = True,
         best_checkpoint_path: Optional[Union[str, Path]] = None,
         best_val_loss: float = np.inf,
     ) -> Dict[str, List[float]]:
-        """Train the autoencoder on a pre-built [N, D] matrix."""
         x = self._as_2d_array(x, "x")
         if x.shape[1] != self.config.input_dim:
             raise ValueError(
@@ -222,10 +199,10 @@ class AE:
         perm = np.random.permutation(n)
         x_norm = x_norm[perm]
         n_val = int(n * val_split)
-        # Avoid empty validation split on very small datasets (e.g. only 2 windows).
+
         if val_split > 0.0 and n > 1 and n_val == 0:
             n_val = 1
-        # Keep at least one training sample.
+
         if n_val >= n:
             n_val = n - 1
         x_val = x_norm[:n_val] if n_val > 0 else None
@@ -293,22 +270,10 @@ class AE:
                 if metric < best_val_loss:
                     self.save(checkpoint_path)
 
-            if verbose and (epoch == 0 or (epoch + 1) % 25 == 0 or epoch + 1 == epochs):
-                if np.isnan(val_loss):
-                    print(f"[AE] epoch {epoch + 1:4d}/{epochs} - train_loss={train_loss:.6f}")
-                else:
-                    print(
-                        f"[AE] epoch {epoch + 1:4d}/{epochs} - "
-                        f"train_loss={train_loss:.6f} val_loss={val_loss:.6f}"
-                    )
-                if checkpoint_path is not None and metric <= best_metric:
-                    print(f"[AE] best checkpoint updated: {checkpoint_path}")
-
         self._is_fitted = True
         return history
 
     def encode(self, x: np.ndarray) -> np.ndarray:
-        """Encode [N, D] input into [N, latent_dim]."""
         if not self._is_fitted:
             raise RuntimeError("AE must be trained (fit) before calling encode.")
         x = self._as_2d_array(x, "x")
@@ -322,7 +287,6 @@ class AE:
         return z.cpu().numpy().astype(np.float32)
 
     def decode(self, z: np.ndarray, denormalize: bool = True) -> np.ndarray:
-        """Decode latent vectors [N, latent_dim] into reconstructed [N, D]."""
         if not self._is_fitted:
             raise RuntimeError("AE must be trained (fit) before calling decode.")
         z = self._as_2d_array(z, "z")
@@ -340,11 +304,9 @@ class AE:
         return recon
 
     def reconstruct(self, x: np.ndarray) -> np.ndarray:
-        """Convenience method: reconstruct input matrix x."""
         return self.decode(self.encode(x), denormalize=True)
 
     def save(self, path: Union[str, Path]) -> None:
-        """Save model + normalization metadata."""
         if self._mean is None or self._std is None:
             raise RuntimeError("Normalization parameters are missing.")
         payload = {
@@ -357,7 +319,6 @@ class AE:
 
     @classmethod
     def load(cls, path: Union[str, Path], device: Optional[str] = None) -> "AE":
-        """Load model + normalization metadata."""
         payload = torch.load(
             str(path),
             map_location="cpu",
